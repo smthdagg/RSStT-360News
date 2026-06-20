@@ -1,0 +1,14 @@
+.env
+config/.env
+config/db.sqlite3
+config/*.json
+!config/xbridge_config.json
+config/x_session.json
+**/__pycache__/
+*.pyc
+.venv/
+config/tweet_screenshots/
+config/db.sqlite3-wal
+config/db.sqlite3-shm
+config/push_history.db
+

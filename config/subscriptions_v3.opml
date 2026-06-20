@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+	<head>
+		<title>360News — 可用 RSS 订阅集 v3</title>
+		<ownerId>https://github.com/Rongronggg9/RSS-to-Telegram-Bot</ownerId>
+	</head>
+	<body>
+
+		<!-- 📰 国际财经新闻 -->
+		<outline title="📰 国际财经新闻" text="📰 国际财经新闻">
+			<outline title="Financial Times" text="FT" type="rss" xmlUrl="https://www.ft.com/rss/home/international" htmlUrl="https://www.ft.com"/>
+			<outline title="MarketWatch" text="MarketWatch" type="rss" xmlUrl="https://feeds.content.dowjones.io/public/rss/mw_topstories" htmlUrl="https://www.marketwatch.com"/>
+			<outline title="BBC News" text="BBC" type="rss" xmlUrl="https://feeds.bbci.co.uk/news/rss.xml" htmlUrl="https://www.bbc.com/news"/>
+			<outline title="New York Times" text="NYT" type="rss" xmlUrl="https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" htmlUrl="https://www.nytimes.com"/>
+		</outline>
+
+		<!-- 📰 中文财经媒体 -->
+		<outline title="📰 中文财经媒体" text="📰 中文财经媒体">
+			<outline title="36氪" text="36氪" type="rss" xmlUrl="https://36kr.com/feed" htmlUrl="https://36kr.com"/>
+			<outline title="第一财经" text="第一财经" type="rss" xmlUrl="https://www.yicai.com/feed" htmlUrl="https://www.yicai.com"/>
+		</outline>
+
+		<!-- 🤖 AI/科技博客 -->
+		<outline title="🤖 AI/科技博客" text="🤖 AI/科技博客">
+			<outline title="Andrej Karpathy" text="Karpathy" type="rss" xmlUrl="https://karpathy.github.io/feed.xml" htmlUrl="https://karpathy.github.io"/>
+			<outline title="Lil'Log" text="Lil'Log" type="rss" xmlUrl="https://lilianweng.github.io/index.xml" htmlUrl="https://lilianweng.github.io"/>
+			<outline title="Simon Willison" text="Simon Willison" type="rss" xmlUrl="https://simonwillison.net/atom/everything/" htmlUrl="https://simonwillison.net"/>
+			<outline title="Chip Huyen" text="Chip Huyen" type="rss" xmlUrl="https://huyenchip.com/feed" htmlUrl="https://huyenchip.com/blog"/>
+			<outline title="Eugene Yan" text="Eugene Yan" type="rss" xmlUrl="https://eugeneyan.com/rss/" htmlUrl="https://eugeneyan.com"/>
+			<outline title="Stratechery" text="Stratechery" type="rss" xmlUrl="https://stratechery.com/feed/" htmlUrl="https://stratechery.com"/>
+			<outline title="Wired" text="Wired" type="rss" xmlUrl="https://www.wired.com/feed/rss" htmlUrl="https://www.wired.com"/>
+		</outline>
+
+		<!-- 🔬 学术前沿 -->
+		<outline title="🔬 学术前沿" text="🔬 学术前沿">
+			<outline title="arXiv: cs.AI" text="AI" type="rss" xmlUrl="https://rss.arxiv.org/rss/cs.AI" htmlUrl="https://arxiv.org/list/cs.AI/recent"/>
+			<outline title="arXiv: cs.LG" text="ML" type="rss" xmlUrl="https://rss.arxiv.org/rss/cs.LG" htmlUrl="https://arxiv.org/list/cs.LG/recent"/>
+			<outline title="arXiv: q-fin" text="Quant Fin" type="rss" xmlUrl="https://rss.arxiv.org/rss/q-fin" htmlUrl="https://arxiv.org/list/q-fin/recent"/>
+			<outline title="Hugging Face Blog" type="rss" xmlUrl="https://huggingface.co/blog/feed.xml" htmlUrl="https://huggingface.co/blog"/>
+			<outline title="OpenAI Blog" type="rss" xmlUrl="https://openai.com/news/rss.xml" htmlUrl="https://openai.com/news"/>
+			<outline title="DeepMind Blog" type="rss" xmlUrl="https://deepmind.google/blog/rss.xml" htmlUrl="https://deepmind.google/blog"/>
+			<outline title="Google AI Blog" type="rss" xmlUrl="https://blog.google/innovation-and-ai/technology/ai/rss/" htmlUrl="https://blog.google/technology/ai/"/>
+		</outline>
+
+		<!-- 💻 科技资讯 -->
+		<outline title="💻 科技资讯" text="💻 科技资讯">
+			<outline title="Techmeme" text="Techmeme" type="rss" xmlUrl="https://www.techmeme.com/feed.xml" htmlUrl="https://www.techmeme.com"/>
+			<outline title="Hacker News" text="HN" type="rss" xmlUrl="https://hnrss.org/frontpage" htmlUrl="https://news.ycombinator.com"/>
+			<outline title="The Verge" text="The Verge" type="rss" xmlUrl="https://www.theverge.com/rss/index.xml" htmlUrl="https://www.theverge.com"/>
+			<outline title="Ars Technica" text="Ars Technica" type="rss" xmlUrl="https://feeds.arstechnica.com/arstechnica/index" htmlUrl="https://arstechnica.com"/>
+			<outline title="MIT Tech Review" type="rss" xmlUrl="https://www.technologyreview.com/feed/" htmlUrl="https://www.technologyreview.com"/>
+			<outline title="NPR News" text="NPR" type="rss" xmlUrl="https://feeds.npr.org/1001/rss.xml" htmlUrl="https://www.npr.org"/>
+		</outline>
+
+		<!-- 💰 加密/Web3 -->
+		<outline title="💰 加密/Web3" text="💰 加密/Web3">
+			<outline title="CoinDesk" text="CoinDesk" type="rss" xmlUrl="https://www.coindesk.com/arc/outboundfeeds/rss" htmlUrl="https://www.coindesk.com"/>
+			<outline title="Vitalik Blog (mirror)" type="rss" xmlUrl="https://vitalik.eth.limo/feed.xml" htmlUrl="https://vitalik.ca"/>
+		</outline>
+
+	</body>
+</opml>
