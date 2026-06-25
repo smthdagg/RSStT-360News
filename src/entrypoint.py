@@ -101,7 +101,9 @@ def init():
         try:
             bot = TelegramClient(os.path.join(env.config_folder_path, 'bot'), api_id, api_hash,
                                  connection=ConnectionTcpObfuscated,  # ZCode: 混淆连接绕过DPI
-                                 proxy=env.TELEGRAM_PROXY_DICT, request_retries=2, flood_sleep_threshold=60,
+                                 proxy=env.TELEGRAM_PROXY_DICT,
+                                 request_retries=5,           # ZCode: 增加重试次数
+                                 flood_sleep_threshold=120,   # ZCode: 延长洪水等待阈值
                                  raise_last_call_error=True, loop=loop).start(bot_token=env.TOKEN)
             break
         except ApiIdPublishedFloodError:
@@ -354,7 +356,43 @@ def main():
                           misfire_grace_time=10)
         scheduler.start()
 
-        loop.run_until_complete(bot.disconnected)
+        # ── Main loop: reconnect on disconnect ──
+        # ZCode: 自动重连 — Telegram 连接断开（网络抖动/代理不稳定）后不退出，继续重试
+        max_reconnect_delay = 300  # 最多等 5 分钟
+        reconnect_delay = 10       # 首次等 10 秒
+        while not scheduler.get_jobs():  # 等待 scheduler 就绪
+            time.sleep(0.1)
+
+        while True:
+            try:
+                loop.run_until_complete(bot.disconnected)
+            except ConnectionError as e:
+                logger.warning(f'Telegram 连接断开({e}), {reconnect_delay}s 后尝试重连...')
+            except Exception as e:
+                logger.warning(f'Telegram 异常断开({type(e).__name__}: {e}), {reconnect_delay}s 后尝试重连...')
+
+            # 从断开恢复：重新连接 Telegram
+            try:
+                loop.run_until_complete(bot.connect())
+                if loop.run_until_complete(bot.is_user_authorized()):
+                    # 重新登录
+                    bot.start(bot_token=env.TOKEN)
+                    reconnect_delay = 10  # 成功后重置延迟
+                    logger.info('Telegram 重连成功！继续运行...')
+                    continue
+                else:
+                    logger.warning('未授权状态，尝试重新登录...')
+                    loop.run_until_complete(bot.sign_in(bot_token=env.TOKEN))
+                    reconnect_delay = 10
+                    logger.info('Telegram 重新登录成功！继续运行...')
+                    continue
+            except Exception as e:
+                logger.error(f'重连失败({type(e).__name__}: {e}), '
+                             f'{reconnect_delay}s 后再次尝试 (最多等待 {max_reconnect_delay}s)')
+
+            # 指数退避等待
+            time.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
     except (KeyboardInterrupt, SystemExit) as e:
         logger.error(f'Received {type(e).__name__}, exiting...', exc_info=e)
         exit_code = e.code if isinstance(e, SystemExit) and e.code is not None else 0
