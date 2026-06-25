@@ -24,6 +24,8 @@ import sys
 import json
 import time
 import re
+import socket
+import http.client
 import threading
 import queue
 import signal
@@ -269,7 +271,9 @@ class XAPIClient:
 
     def _graphql(self, query_id: str, operation_name: str, variables: dict,
                  features: dict = None) -> dict:
-        """Make a GraphQL POST request to X API."""
+        """Make a GraphQL POST request to X API.
+        Retries on transient network errors (IncompleteRead, timeout, etc.).
+        Creates a fresh opener per retry to avoid stale proxy connections."""
         body = json.dumps({
             "variables": variables,
             "features": features or {},
@@ -297,17 +301,61 @@ class XAPIClient:
 
         req = urllib.request.Request(url, data=body, headers=headers)
 
-        try:
-            r = self._opener.open(req, timeout=FETCH_TIMEOUT)
-            resp_body = r.read().decode('utf-8')
-            return json.loads(resp_body)
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8', errors='replace')
-            print(f"[XBridge][API] HTTP {e.code} for {operation_name}: {error_body[:200]}")
-            return json.loads(error_body) if error_body else {}
-        except Exception as e:
-            print(f"[XBridge][API] Error in {operation_name}: {e}")
-            raise
+        max_retries = 3
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            # Create fresh opener for each retry to avoid stale proxy connections
+            proxy_support = urllib.request.ProxyHandler({
+                'http': SOCKS5_PROXY,
+                'https': SOCKS5_PROXY,
+            })
+            opener = urllib.request.build_opener(proxy_support)
+
+            try:
+                r = opener.open(req, timeout=FETCH_TIMEOUT)
+                resp_body = r.read().decode('utf-8')
+                return json.loads(resp_body)
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode('utf-8', errors='replace')
+                print(f"[XBridge][API] HTTP {e.code} for {operation_name}: {error_body[:200]}")
+                # 4xx errors are not retryable (except 429)
+                if e.code != 429 or attempt == max_retries:
+                    return json.loads(error_body) if error_body else {}
+                print(f"[XBridge][API] HTTP 429 rate limited, retry {attempt}/{max_retries}...")
+                time.sleep(5 * attempt)
+                last_error = e
+                continue
+            except http.client.IncompleteRead as e:
+                partial_len = len(e.partial) if isinstance(e.partial, bytes) else 0
+                print(f"[XBridge][API] IncompleteRead ({partial_len}/{e.expected or '?'} bytes), "
+                      f"retry {attempt}/{max_retries}...")
+                time.sleep(2 * attempt)
+                last_error = e
+                continue
+            except (urllib.error.URLError, socket.timeout, OSError) as e:
+                err_msg = str(e)[:80]
+                print(f"[XBridge][API] Network error ({err_msg}), "
+                      f"retry {attempt}/{max_retries}...")
+                time.sleep(3 * attempt)
+                last_error = e
+                continue
+            except Exception as e:
+                print(f"[XBridge][API] Error in {operation_name}: {e}")
+                if attempt < max_retries:
+                    time.sleep(2 * attempt)
+                    last_error = e
+                    continue
+                raise
+
+        # All retries exhausted
+        if isinstance(last_error, http.client.IncompleteRead):
+            print(f"[XBridge][API] All retries exhausted for {operation_name} (IncompleteRead)")
+            return {}
+        # Don't re-raise network errors — return empty dict so caller gets graceful failure
+        if isinstance(last_error, (urllib.error.URLError, socket.timeout, OSError)):
+            print(f"[XBridge][API] All retries exhausted for {operation_name} (network error)")
+            return {}
+        raise last_error  # type: ignore[misc]
 
     def get_user_by_screen_name(self, screen_name: str) -> dict:
         """
