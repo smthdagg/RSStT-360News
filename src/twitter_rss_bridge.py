@@ -169,6 +169,7 @@ cache = {}
 cache_lock = threading.Lock()
 fetch_queue = queue.Queue()
 shutdown_event = threading.Event()
+xapi_worker = None  # 全局 XAPIWorker 实例，供 HTTP handler 访问
 
 
 # ── Database helpers ───────────────────────────────────────────────────────
@@ -229,6 +230,7 @@ class XAPIClient:
         self._cookie_str = None
         self._ct0 = None
         self._opener = None
+        self._session_info = None  # session 状态信息
 
     def start(self):
         """Initialize the API client with cookies from session file."""
@@ -239,6 +241,15 @@ class XAPIClient:
 
     def _load_session(self):
         """Load cookies from session file."""
+        self._session_info = {
+            'has_session': False,
+            'has_auth': False,
+            'cookie_count': 0,
+            'auth_expires': None,
+            'ct0_expires': None,
+            'loaded_at': time.time(),
+        }
+
         if not SESSION_FILE.exists():
             print("[XBridge][API] ⚠ No session file found, API calls may fail")
             self._cookie_str = ""
@@ -250,16 +261,64 @@ class XAPIClient:
 
         cookies_list = data.get('cookies', data)
         cookies_dict = {}
+        cookie_expires = {}
         for c in cookies_list:
             name = c.get('name', '')
             value = c.get('value', '')
             cookies_dict[name] = value
+            # 记录关键 cookie 的过期时间
+            if name in ('auth_token', 'ct0'):
+                cookie_expires[name] = c.get('expires', -1)
 
         self._ct0 = cookies_dict.get('ct0', '')
         self._cookie_str = '; '.join([f'{k}={v}' for k, v in cookies_dict.items()])
 
         has_auth = bool(cookies_dict.get('auth_token'))
+        self._session_info = {
+            'has_session': True,
+            'has_auth': has_auth,
+            'cookie_count': len(cookies_dict),
+            'auth_expires': cookie_expires.get('auth_token'),
+            'ct0_expires': cookie_expires.get('ct0'),
+            'loaded_at': time.time(),
+        }
         print(f"[XBridge][API] Session loaded: {len(cookies_dict)} cookies, auth={has_auth}")
+
+    def get_session_status(self) -> dict:
+        """返回 Cookie session 的状态信息，用于 /session 端点。"""
+        if not self._session_info:
+            return {'has_session': False, 'has_auth': False, 'is_expired': True,
+                    'expires_in_seconds': 0, 'expires_in_human': '未知'}
+
+        info = self._session_info
+        now = time.time()
+        auth_expires = info.get('auth_expires')
+
+        if not info.get('has_auth'):
+            return {**info, 'is_expired': True, 'expires_in_seconds': 0,
+                    'expires_in_human': '无 auth_token'}
+
+        if auth_expires is None or auth_expires == -1:
+            # session cookie，无法判断过期时间
+            return {**info, 'is_expired': False, 'expires_in_seconds': None,
+                    'expires_in_human': '会话级（无法判断）'}
+
+        expires_in = auth_expires - now
+        is_expired = expires_in <= 0
+
+        # 人类可读的剩余时间
+        if is_expired:
+            human = '已失效'
+        elif expires_in < 3600:
+            human = f'剩余 {int(expires_in / 60)} 分钟'
+        elif expires_in < 86400:
+            human = f'剩余 {int(expires_in / 3600)} 小时'
+        else:
+            human = f'剩余 {int(expires_in / 86400)} 天'
+
+        return {**info, 'is_expired': is_expired,
+                'expires_in_seconds': int(expires_in),
+                'expires_in_human': human}
 
     def _setup_opener(self):
         """Create urllib opener with SOCKS5 proxy."""
@@ -844,7 +903,9 @@ def cache_worker():
     3. Processes on-demand fetch requests from the queue
     """
     print("[XBridge] Cache worker starting...")
+    global xapi_worker
     worker = XAPIWorker()
+    xapi_worker = worker
 
     try:
         worker.start()
@@ -946,11 +1007,24 @@ class RSSBridgeHandler(BaseHTTPRequestHandler):
                     'age': int(time.time() - v['updated_at']),
                     'error': v.get('error'),
                 } for k, v in cache.items()}
+            session_status = {}
+            if xapi_worker and xapi_worker._client:
+                session_status = xapi_worker._client.get_session_status()
             self._send_json(200, {
                 'status': 'ok',
                 'users_cached': len(cache),
                 'cache_status': cache_status if len(cache) < 10 else f"{len(cache)} users",
+                'session': session_status,
             })
+
+        elif path == '/session':
+            """返回 Cookie session 状态。"""
+            if xapi_worker and xapi_worker._client:
+                status = xapi_worker._client.get_session_status()
+            else:
+                status = {'has_session': False, 'has_auth': False,
+                          'is_expired': True, 'expires_in_human': '桥接未就绪'}
+            self._send_json(200, status)
 
         elif path.startswith('/twitter/user/'):
             username = path.split('/')[-1]
@@ -1020,7 +1094,7 @@ class RSSBridgeHandler(BaseHTTPRequestHandler):
             self._send_json(200, info)
 
         else:
-            self._send_error(404, 'Not found. Endpoints: /twitter/user/{username}, /health, /users, /refresh, /cache')
+            self._send_error(404, 'Not found. Endpoints: /twitter/user/{username}, /health, /session, /users, /refresh, /cache')
 
     def _send_json(self, status, data):
         body = json.dumps(data, ensure_ascii=False, indent=2)
