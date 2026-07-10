@@ -293,7 +293,7 @@ R_PROXY: Final = os.environ.get('R_PROXY') or DEFAULT_PROXY
 
 REQUESTS_PROXIES: Final = {'all': R_PROXY} if R_PROXY else {}
 
-PROXY_BYPASS_PRIVATE: Final = __bool_parser(os.environ.get('PROXY_BYPASS_PRIVATE'))
+PROXY_BYPASS_PRIVATE: Final = __bool_parser(os.environ.get('PROXY_BYPASS_PRIVATE'), default_value=True)
 PROXY_BYPASS_DOMAINS: Final = __list_parser(os.environ.get('PROXY_BYPASS_DOMAINS'))
 USER_AGENT: Final = os.environ.get('USER_AGENT') or 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 IPV6_PRIOR: Final = __bool_parser(os.environ.get('IPV6_PRIOR'))
