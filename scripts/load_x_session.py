@@ -1,64 +1,118 @@
 #!/usr/bin/env python3
-"""一键加载 X.com cookies 并重启桥接。
-用法: 导出 cookies.json 到 Downloads 后立即运行此脚本。"""
+"""Import or renew the persistent Camoufox X session, then restart the bridge.
 
-import json, subprocess, time, sys
+Examples:
+  .venv/bin/python scripts/load_x_session.py
+  .venv/bin/python scripts/load_x_session.py --interactive-login
+  .venv/bin/python scripts/load_x_session.py --account elonmusk --no-restart
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
 from pathlib import Path
 
-cookies_path = Path.home() / 'Downloads' / 'cookies.json'
-session_path = Path(__file__).parent.parent / 'config' / 'x_session.json'
 
-if not cookies_path.exists():
-    print(f"❌ 未找到 {cookies_path}")
-    print("请先在 Chrome 中用 EditThisCookie 导出 cookies.json 到 Downloads")
-    sys.exit(1)
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-raw = json.loads(cookies_path.read_text())
-raw = [c for c in raw if c['name'] not in ('g_state', '__cf_bm')]
+from src.x_browser_fetcher import XBrowserFetcher, sanitize_x_cookies
 
-cookies = []
-for c in raw:
-    cookies.append({
-        'name': c['name'], 'value': c['value'],
-        'domain': c['domain'], 'path': c.get('path', '/'),
-        'expires': c.get('expirationDate', -1),
-        'httpOnly': c.get('httpOnly', False),
-        'secure': c.get('secure', False),
-        'sameSite': {'unspecified': 'None', 'no_restriction': 'None', 'lax': 'Lax'}.get(c.get('sameSite', ''), 'None'),
-    })
 
-session_path.write_text(json.dumps({'cookies': cookies, 'origins': []}))
-auth = [c['value'][:20] for c in cookies if c['name'] == 'auth_token']
-print(f"✅ {len(cookies)} cookies 已保存 (auth_token: {auth[0] if auth else 'N/A'}...)")
+SESSION_FILE = ROOT / "config" / "x_session.json"
+PROFILE_DIR = ROOT / "config" / "x_browser_profile"
+DEFAULT_EXPORT = Path.home() / "Downloads" / "cookies.json"
+LOG_FILE = Path("/private/tmp/xbridge_camoufox.log")
 
-# 验证 cookies
-import urllib.request
-test_headers = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    'Cookie': f'auth_token={auth[0]}; ct0={[c["value"] for c in cookies if c["name"]=="ct0"][0] if [c["value"] for c in cookies if c["name"]=="ct0"] else ""}',
-}
-try:
-    resp = urllib.request.urlopen(urllib.request.Request('https://x.com/cailianpress', headers=test_headers), timeout=10)
-    html = resp.read().decode(errors='replace')
-    if 'entry-client-logged-in' in html:
-        print("✅ cookies 有效（已登录版本）")
-    elif 'entry-client-logged-out' in html:
-        print("⚠️  cookies 返回了未登录页面，请重新导出")
-        sys.exit(1)
+
+def import_cookie_export(path: Path) -> int:
+    raw = json.loads(path.read_text())
+    source = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+    if not isinstance(source, list):
+        raise ValueError("cookie export must be a JSON list or contain a cookies list")
+    cookies = sanitize_x_cookies(source)
+    names = {cookie["name"] for cookie in cookies}
+    if "auth_token" not in names or "ct0" not in names:
+        raise ValueError("cookie export is missing auth_token or ct0")
+    SESSION_FILE.write_text(json.dumps({"cookies": cookies, "origins": []}, indent=2))
+    return len(cookies)
+
+
+def stop_bridge() -> None:
+    subprocess.run(["pkill", "-f", "src/twitter_rss_bridge.py"], capture_output=True)
+    time.sleep(2)
+
+
+def restart_bridge() -> int:
+    log = LOG_FILE.open("a")
+    process = subprocess.Popen(
+        [str(ROOT / ".venv" / "bin" / "python"), "-u", str(ROOT / "src" / "twitter_rss_bridge.py")],
+        cwd=ROOT,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    log.close()
+    return process.pid
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cookies", type=Path, default=DEFAULT_EXPORT)
+    parser.add_argument("--account", default="elonmusk", help="account used for session verification")
+    parser.add_argument("--interactive-login", action="store_true")
+    parser.add_argument("--no-restart", action="store_true")
+    args = parser.parse_args()
+
+    print("=" * 58)
+    print("  X.com Camoufox 持久会话导入 / 更新")
+    print("=" * 58)
+    stop_bridge()
+
+    if args.cookies.exists():
+        count = import_cookie_export(args.cookies)
+        print(f"✓ 已从 {args.cookies} 导入 {count} 个 X 域 cookie（已去重和过滤）")
+    elif not SESSION_FILE.exists() and not args.interactive_login:
+        print(f"✗ 未找到 {args.cookies}，也没有旧会话")
+        print("  请导出 X cookie，或使用 --interactive-login")
+        return 1
     else:
-        print("⚠️  页面状态异常，重试...")
-        sys.exit(1)
-except Exception as e:
-    print(f"❌ cookies 验证失败: {e}")
-    sys.exit(1)
+        print("ℹ 未发现新 cookie 导出，继续使用持久 profile")
 
-# 重启桥接
-print("\n重启桥接服务...")
-subprocess.run(['pkill', '-f', 'twitter_rss_bridge'], capture_output=True)
-time.sleep(2)
-proc = subprocess.Popen(
-    [sys.executable, str(Path(__file__).parent.parent / 'src' / 'twitter_rss_bridge.py')],
-    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-)
-print(f"✅ 桥接已重启 (PID: {proc.pid})")
-print("   会话已就绪，X 推文将正常抓取")
+    fetcher = XBrowserFetcher(
+        session_file=SESSION_FILE,
+        profile_dir=PROFILE_DIR,
+        headless=not args.interactive_login,
+        timeout_seconds=60,
+    )
+    try:
+        if args.interactive_login:
+            fetcher.open_page("https://x.com/home")
+            input("请在 Camoufox 窗口完成 X 登录，确认首页可见后按回车……")
+            count = fetcher.save_session_cookies()
+            print(f"✓ 已从持久浏览器保存 {count} 个 X cookie")
+
+        tweets = fetcher.fetch_tweets(args.account)
+        if not tweets:
+            raise RuntimeError(f"@{args.account} 时间线为空")
+        print(f"✓ 会话验证成功：@{args.account} 获取 {len(tweets)} 条，HTTP {fetcher.last_status}")
+    finally:
+        fetcher.close()
+
+    if args.no_restart:
+        print("ℹ 已按 --no-restart 跳过 Bridge 重启")
+        return 0
+
+    pid = restart_bridge()
+    print(f"✓ Camoufox Bridge 已重启（PID {pid}）")
+    print("  健康检查: http://127.0.0.1:1200/health")
+    print(f"  日志: {LOG_FILE}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

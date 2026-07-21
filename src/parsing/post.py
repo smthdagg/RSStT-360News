@@ -110,7 +110,8 @@ class Post:
             display_entry_tags=sub.display_entry_tags if sub.display_entry_tags != -100 else user.display_entry_tags,
             style=sub.style if sub.style != -100 else user.style,
             display_media=sub.display_media if sub.display_media != -100 else user.display_media,
-            silent=not (sub.notify if sub.notify != -100 else user.notify)
+            silent=not (sub.notify if sub.notify != -100 else user.notify),
+            category=sub.tags or None  # ZCode: 订阅标签作为信息类别
         )
 
     async def send_formatted_post(self,
@@ -126,7 +127,8 @@ class Post:
                                   display_entry_tags: int = -1,
                                   style: int = 0,
                                   display_media: int = 0,
-                                  silent: bool = False):
+                                  silent: bool = False,
+                                  category: Optional[str] = None):
         """
         Send formatted post.
 
@@ -158,7 +160,8 @@ class Post:
                                                                  display_title=display_title,
                                                                  display_entry_tags=display_entry_tags,
                                                                  style=style,
-                                                                 display_media=display_media)
+                                                                 display_media=display_media,
+                                                                 category=category)
 
                 if formatted_post_tuple is None:
                     logger.debug(f'Post {self.link} is not sent to user {user_id} due to empty content')

@@ -354,6 +354,15 @@ def main():
                           trigger=CronTrigger(minute='*', second=env.CRON_SECOND, timezone='UTC'),
                           max_instances=10,
                           misfire_grace_time=10)
+
+        # ZCode: X Bridge 健康检查 -- auth_token 失效时发红色告警到 MANAGER
+        from .monitor.x_health import check_x_bridge_health
+        scheduler.add_job(func=check_x_bridge_health,
+                          trigger=CronTrigger(minute='*/10', second=env.CRON_SECOND, timezone='UTC'),
+                          max_instances=1,
+                          misfire_grace_time=30)
+        logger.info('X Bridge health check scheduled (every 10 min)')
+
         scheduler.start()
 
         # ── Main loop: reconnect on disconnect ──

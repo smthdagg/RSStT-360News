@@ -173,7 +173,8 @@ class PostFormatter:
                                  display_title: int = 0,
                                  display_entry_tags: int = -1,
                                  style: int = 0,
-                                 display_media: int = 0) -> Optional[tuple[str, bool, bool]]:
+                                 display_media: int = 0,
+                                 category: Optional[str] = None) -> Optional[tuple[str, bool, bool]]:
         """
         Get formatted post.
 
@@ -207,7 +208,7 @@ class PostFormatter:
         tags = tags or []
 
         param_hash = f'{sub_title}|{tags}|{send_mode}|{length_limit}|{link_preview}|' \
-                     f'{display_author}|{display_via}|{display_title}|{display_entry_tags}|{display_media}|{style}'
+                     f'{display_author}|{display_via}|{display_title}|{display_entry_tags}|{display_media}|{style}|{category}'
 
         if param_hash in self.__param_to_option_cache:
             option_hash = self.__param_to_option_cache[param_hash]
@@ -367,7 +368,7 @@ class PostFormatter:
         # ---- determine need_link_preview ----
         need_link_preview = link_preview != DISABLE and (link_preview == FORCE_ENABLE or message_type != NORMAL_MESSAGE)
 
-        option_hash = f'{sub_title}|{tags}|{title_type}|{via_type}|{need_author}|{message_type}|{message_style}'
+        option_hash = f'{sub_title}|{tags}|{title_type}|{via_type}|{need_author}|{message_type}|{message_style}|{category}'
         self.__param_to_option_cache[param_hash] = option_hash
 
         if option_hash in self.__post_bucket:
@@ -400,7 +401,8 @@ class PostFormatter:
                                                 via_type=via_type,
                                                 need_author=need_author,
                                                 message_type=message_type,
-                                                message_style=message_style)
+                                                message_style=message_style,
+                                                category=category)
             self.__post_bucket[option_hash] = post, need_media, need_link_preview
             return post, need_media, need_link_preview
 
@@ -411,7 +413,8 @@ class PostFormatter:
                                    via_type: TypeViaType,
                                    need_author: bool,
                                    message_type: TypeMessageType,
-                                   message_style: TypeMessageStyle) -> tuple[str, str]:
+                                   message_style: TypeMessageStyle,
+                                   category: Optional[str] = None) -> tuple[str, str]:
         # RSStT style:
         # {title}
         # {hashtag}  (* optional)
@@ -501,21 +504,25 @@ class PostFormatter:
                     + (author_html or '')
             )
 
-            # ZCode: 时间标记 + 跳转链接（北京时间）
-            time_parts = []
+            # ZCode: 信息类别 + 时间标记 + 跳转链接（北京时间）
+            meta_parts = []
+            # 信息类别（复用订阅 tags，如 "AI 大佬"、"投资/金融"）
+            if category:
+                meta_parts.append(f'📦 {category}')
             if self.pub_time:
                 pub_str = _fmt_bj(self.pub_time)
-                time_parts.append(f'📅 {pub_str}')
+                meta_parts.append(f'📅 {pub_str}')
                 if self.push_time:
                     push_str = _fmt_bj(self.push_time)
-                    time_parts.append(f'🚀 {push_str}')
+                    meta_parts.append(f'🚀 {push_str}')
                     delay_str = _time_diff_str(self.pub_time, self.push_time)
-                    time_parts.append(f'⏱ {delay_str}')
+                    meta_parts.append(f'⏱ {delay_str}')
             if self.link:
-                time_parts.append(f'<a href="{html_escape(self.link)}">🔗 原文</a>')
-            if time_parts:
-                time_html = '\n' + ' | '.join(time_parts)
-                footer += time_html
+                meta_parts.append(f'<a href="{html_escape(self.link)}">🔗 原文</a>')
+            if meta_parts:
+                # 每个字段独占一行，视觉清晰
+                meta_html = '\n' + '\n'.join(meta_parts)
+                footer += meta_html
 
             return header, footer
         if message_style == FLOWERSS_STYLE:
@@ -571,14 +578,16 @@ class PostFormatter:
                                 via_type: TypeViaType,
                                 need_author: bool,
                                 message_type: TypeMessageType,
-                                message_style: TypeMessageStyle) -> str:
+                                message_style: TypeMessageStyle,
+                                category: Optional[str] = None) -> str:
         header, footer = self.get_post_header_and_footer(sub_title=sub_title,
                                                          tags=tags,
                                                          title_type=title_type,
                                                          via_type=via_type,
                                                          need_author=need_author,
                                                          message_type=message_type,
-                                                         message_style=message_style)
+                                                         message_style=message_style,
+                                                         category=category)
         content = self.parsed_html if message_type == NORMAL_MESSAGE else ''
         return (
                 header

@@ -326,6 +326,7 @@ class Notifier:
                             post_url=post.link,
                             pub_time=post.pub_time,
                             feed_id=getattr(sub, 'feed_id', 0),
+                            category=getattr(sub, 'tags', '') or '',  # ZCode: 订阅标签作为信息类别
                         )
                 except Exception:
                     pass

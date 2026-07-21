@@ -75,24 +75,12 @@ async def _translate_google(text: str, target: str = 'zh-CN') -> Optional[str]:
     return None
 
 
-async def _translate_fallback(text: str, target: str = 'zh-CN') -> Optional[str]:
-    """回退后端：googletrans（另一个库，备胎）"""
-    try:
-        def _sync():
-            from googletrans import Translator
-            t = Translator()
-            return t.translate(text, dest=target).text
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _sync)
-        if result and result.strip():
-            return result
-    except Exception as e:
-        logger.debug(f'Fallback translate failed: {e}')
-    return None
-
-
 async def translate(text: str, target: str = 'zh-CN') -> str:
-    """翻译文本：先 GoogleTranslate，失败则回退到 googletrans"""
+    """翻译文本：使用 GoogleTranslate (deep_translator)，失败则返回原文。
+
+    注：曾用 googletrans 作为备胎，但它钉死 httpx==0.13.3 且长期无人维护，
+    与 twscrape (httpx>=0.26) 冲突，故移除。deep_translator 底层同样走
+    Google 免费接口，作为唯一后端已足够。"""
     if not should_translate(text):
         return text
 
@@ -103,10 +91,7 @@ async def translate(text: str, target: str = 'zh-CN') -> str:
     async with _rate_limiter:
         result = await _translate_google(text, target)
         if not result:
-            logger.info('Google Translate 失败，尝试回退后端...')
-            result = await _translate_fallback(text, target)
-        if not result:
-            logger.warning('所有翻译后端均失败，返回原文')
+            logger.warning('Google Translate 失败，返回原文')
             result = text
 
     # 缓存

@@ -1,3 +1,7 @@
 {
-  "interval": 1200
+  "interval": 3600,
+  "failure_backoff": 1800,
+  "request_delay": 12,
+  "fetch_timeout": 45,
+  "headless": true
 }
