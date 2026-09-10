@@ -26,6 +26,15 @@ class XBridgeImageTests(unittest.TestCase):
 
         self.assertIn('enclosure url="http://127.0.0.1:1200/tweet-image/123.png" type="image/png"', rss)
 
+    def test_x_screenshot_is_the_only_media_enclosure(self):
+        rss = generate_rss("daydayuplift", [{
+            "id": "126", "url": "https://x.com/i/web/status/126", "text": "post",
+            "screenshot_url": "http://127.0.0.1:1200/tweet-image/126.png?v=15",
+            "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/original.jpg"}],
+        }])
+        self.assertIn("tweet-image/126.png?v=15", rss)
+        self.assertNotIn("original.jpg", rss)
+
     def test_rss_keeps_only_main_tweet_text(self):
         rss = generate_rss("daydayuplift", [{
             "id": "124", "url": "https://x.com/i/web/status/124", "text": "main",

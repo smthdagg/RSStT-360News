@@ -363,13 +363,17 @@ def generate_rss(username: str, tweets: list) -> str:
         screenshot_url = tweet.get('screenshot_url')
         if screenshot_url:
             media_links.append(f'<img src="{xml_escape(screenshot_url)}" />')
-        for m in tweet.get('media', []):
-            if m['type'] == 'photo':
-                media_links.append(f'<img src="{xml_escape(m["url"])}" />')
-            elif m['type'] == 'video':
-                media_links.append(
-                    f'<video poster="{xml_escape(m["poster"])}" controls>'
-                    f'<source src="{xml_escape(m["url"])}"></video>')
+        # X posts use the complete browser screenshot as the only media.
+        # Sending the original X media as a second enclosure makes Telegram
+        # show the wrong image or a mixed media group.
+        if not screenshot_url:
+            for m in tweet.get('media', []):
+                if m['type'] == 'photo':
+                    media_links.append(f'<img src="{xml_escape(m["url"])}" />')
+                elif m['type'] == 'video':
+                    media_links.append(
+                        f'<video poster="{xml_escape(m["poster"])}" controls>'
+                        f'<source src="{xml_escape(m["url"])}"></video>')
         if media_links:
             description += '\n\n' + '\n'.join(media_links)
 
@@ -377,11 +381,11 @@ def generate_rss(username: str, tweets: list) -> str:
         if screenshot_url:
             enclosures.append(
                 f'<enclosure url="{xml_escape(screenshot_url)}" type="image/png" length="0"/>')
-        media_list = tweet.get('media', [])
-        for m in media_list:
-            if m['type'] == 'photo':
-                enclosures.append(
-                    f'<enclosure url="{xml_escape(m["url"])}" type="image/jpeg" length="0"/>')
+        if not screenshot_url:
+            for m in tweet.get('media', []):
+                if m['type'] == 'photo':
+                    enclosures.append(
+                        f'<enclosure url="{xml_escape(m["url"])}" type="image/jpeg" length="0"/>')
         enclosure_block = '\n' + '\n'.join(enclosures) if enclosures else ''
 
         title = text.split('\n')[0] if text else '(no text)'
