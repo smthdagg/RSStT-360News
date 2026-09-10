@@ -48,6 +48,7 @@ from src.x_browser_fetcher import (
 # ── Configuration ──────────────────────────────────────────────────────────
 
 PORT = 1200
+APP_VERSION = os.environ.get('RSSTT_APP_VERSION', 'dev')
 FETCH_LIMIT = 40          # 每个 KOL 抓多少条
 X_URL = "https://x.com"
 
@@ -547,6 +548,7 @@ class RSSBridgeHandler(BaseHTTPRequestHandler):
                 session_status = xapi_worker.get_session_status()
             self._send_json(200, {
                 'status': 'ok',
+                'version': APP_VERSION,
                 'backend': 'Camoufox',
                 'users_cached': len(cache),
                 'cache_status': cache_status if len(cache) < 10 else f"{len(cache)} users",
