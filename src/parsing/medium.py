@@ -22,6 +22,9 @@ from collections.abc import Callable, Awaitable
 
 import asyncio
 import re
+import os
+import mimetypes
+import PIL.Image
 from io import BytesIO
 from collections import defaultdict
 from telethon.tl.functions.messages import UploadMediaRequest
@@ -38,6 +41,16 @@ from ..web.media import construct_weserv_url_convert_to_2560, construct_weserv_u
     insert_image_relay_into_weserv_url, detect_image_dimension_via_weserv
 
 logger = log.getLogger('RSStT.medium')
+
+
+def _local_tweet_screenshot(url: str) -> str:
+    """Map the bridge's loopback screenshot URL to the local PNG file."""
+    parsed = urlparse(url)
+    match = re.fullmatch(r'/tweet-image/(\d+)\.png', parsed.path)
+    if parsed.hostname not in {'127.0.0.1', 'localhost'} or not match:
+        return url
+    path = os.path.join(env.config_folder_path, 'tweet_screenshots', f'{match.group(1)}.png')
+    return path if os.path.isfile(path) else url
 
 # TODO: separate quirks into another module
 sinaimg_sizes: Final = ('large', 'mw2048', 'mw1024', 'mw720', 'middle')
@@ -277,6 +290,7 @@ class Medium(AbstractMedium):
     def __init__(self, urls: Union[str, list[str]], type_fallback_urls: Optional[Union[str, list[str]]] = None):
         super().__init__()
         urls = urls if isinstance(urls, list) else [urls]
+        urls = [_local_tweet_screenshot(url) for url in urls]
         # dedup while keeping the order
         self.urls: list[str] = list(dict.fromkeys(urls))
         self.original_urls: tuple[str, ...] = tuple(self.urls)
@@ -339,6 +353,24 @@ class Medium(AbstractMedium):
 
             while self.urls:
                 url = self.urls.pop(0)
+                if os.path.isfile(url):
+                    try:
+                        with PIL.Image.open(url) as image:
+                            self.size = os.path.getsize(url)
+                            self.width, self.height = image.size
+                        self.content_type = mimetypes.guess_type(url)[0] or 'application/octet-stream'
+                        self.max_width = max(self.max_width, self.width)
+                        self.max_height = max(self.max_height, self.height)
+                        ratio = self.width / self.height if self.height else 0
+                        self.valid = self.type == IMAGE and self.size <= self.maxSize and \
+                            self.width + self.height <= 10000 and 0.05 < ratio < 20
+                        if self.valid:
+                            self.chosen_url = url
+                            return True
+                    except (OSError, PIL.UnidentifiedImageError):
+                        pass
+                    invalid_reasons.append('local image read failed')
+                    continue
                 if not isAbsoluteHttpLink(url):  # bypass non-http links
                     invalid_reasons.append('non-http link')
                     continue
