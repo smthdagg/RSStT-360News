@@ -161,7 +161,6 @@
       <outline title="ECB Press" text="ECB Press" type="rss" xmlUrl="https://www.ecb.europa.eu/rss/press.html" htmlUrl="https://www.ecb.europa.eu/" />
       <outline title="Economic Times" text="Economic Times" type="rss" xmlUrl="https://economictimes.indiatimes.com/rssfeedstopstories.cms" htmlUrl="https://economictimes.indiatimes.com/" />
       <outline title="Federal Reserve" text="Federal Reserve" type="rss" xmlUrl="https://www.federalreserve.gov/feeds/press_all.xml" htmlUrl="https://www.federalreserve.gov/" />
-      <outline title="Financial Times" text="Financial Times" type="rss" xmlUrl="https://www.ft.com/rss/home" htmlUrl="https://www.ft.com/" />
       <outline title="Financial Times" text="Financial Times" type="rss" xmlUrl="https://www.ft.com/rss/home/international" htmlUrl="https://www.ft.com/" />
       <outline title="Finextra" text="Finextra" type="rss" xmlUrl="https://www.finextra.com/rss/headlines.aspx" htmlUrl="https://www.finextra.com/" />
       <outline title="Foreign Policy" text="Foreign Policy" type="rss" xmlUrl="https://foreignpolicy.com/feed/" htmlUrl="https://foreignpolicy.com/" />
@@ -185,7 +184,6 @@
       <outline title="Reddit r/wallstreetbets" text="Reddit r/wallstreetbets" type="rss" xmlUrl="https://www.reddit.com/r/wallstreetbets/.rss" htmlUrl="https://www.reddit.com/" />
       <outline title="SEC" text="SEC" type="rss" xmlUrl="https://www.sec.gov/news/pressreleases.rss" htmlUrl="https://www.sec.gov/" />
       <outline title="Seeking Alpha" text="Seeking Alpha" type="rss" xmlUrl="https://seekingalpha.com/market_currents.xml" htmlUrl="https://seekingalpha.com/" />
-      <outline title="Seeking Alpha" text="Seeking Alpha" type="rss" xmlUrl="https://seekingalpha.com/feed.xml" htmlUrl="https://seekingalpha.com/" />
       <outline title="South China Morning Post" text="South China Morning Post" type="rss" xmlUrl="https://www.scmp.com/rss/91/feed" htmlUrl="https://www.scmp.com/" />
       <outline title="The Block" text="The Block" type="rss" xmlUrl="https://www.theblock.co/rss.xml" htmlUrl="https://www.theblock.co/" />
       <outline title="The Economist" text="The Economist" type="rss" xmlUrl="https://www.economist.com/finance-and-economics/rss.xml" htmlUrl="https://www.economist.com/" />

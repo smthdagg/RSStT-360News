@@ -26,6 +26,7 @@ from traceback import format_exc
 from ._common import logger, TIMEOUT
 from ._stat import NotifierStat
 from .. import db, env, web
+from ..bot_router import route_for_feed
 from ..command import inner
 from ..command.utils import default_leave_chat_helper, escape_html
 from ..compat import nullcontext
@@ -302,6 +303,12 @@ class Notifier:
 
     async def _send(self, sub: db.Sub, post: Union[str, Post]) -> None:
         user_id = sub.user_id
+        feed_link = post.feed_link if isinstance(post, Post) else None
+        feed_link = feed_link or getattr(getattr(sub, 'feed', None), 'link', None)
+        with route_for_feed(feed_link, env.ROUTED_BOT_FEEDS):
+            await self._send_routed(sub, post, user_id)
+
+    async def _send_routed(self, sub: db.Sub, post: Union[str, Post], user_id: int) -> None:
         try:
             try:
                 await env.bot.get_input_entity(user_id)  # verify that the input entity can be gotten first

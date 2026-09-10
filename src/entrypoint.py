@@ -48,6 +48,7 @@ from .i18n import i18n, ALL_LANGUAGES, get_commands_list
 from .parsing import tgraph
 from .helpers.bg import bg
 from .helpers.queue import queued
+from .bot_router import BotRouter
 
 # log
 logger = log.getLogger('RSStT')
@@ -124,6 +125,37 @@ def init():
     env.bot_peer = loop.run_until_complete(bot.get_me(input_peer=False))
     env.bot_input_peer = loop.run_until_complete(bot.get_me(input_peer=True))
     env.bot_id = env.bot_peer.id
+
+    if env.ROUTED_BOT_TOKEN and env.ROUTED_BOT_FEEDS:
+        secondary_bot = TelegramClient(
+            os.path.join(env.config_folder_path, 'bot_routed'), api_id, api_hash,
+            connection=ConnectionTcpObfuscated,
+            proxy=env.TELEGRAM_PROXY_DICT,
+            request_retries=5,
+            flood_sleep_threshold=120,
+            raise_last_call_error=True,
+            loop=loop,
+        ).start(bot_token=env.ROUTED_BOT_TOKEN)
+
+        secondary_peer = loop.run_until_complete(secondary_bot.get_me(input_peer=False))
+
+        async def guard_secondary_group_add(event):
+            if not event.user_added or event.user_id != secondary_peer.id:
+                return
+            actor = event.added_by
+            actor_id = getattr(actor, 'id', actor) if actor is not True else None
+            if actor_id in env.ROUTED_MANAGER:
+                return
+            try:
+                await event.client.delete_dialog(event.chat_id)
+                logger.info('Secondary bot left unauthorized group %s', event.chat_id)
+            except Exception as exc:
+                logger.warning('Failed to leave unauthorized group %s: %s', event.chat_id, exc)
+
+        secondary_bot.add_event_handler(guard_secondary_group_add, events.ChatAction)
+        env.bot = BotRouter(bot, secondary_bot)
+        logger.info('Secondary bot routing enabled for: %s (admins: %s)',
+                    ', '.join(sorted(env.ROUTED_BOT_FEEDS)), ', '.join(map(str, sorted(env.ROUTED_MANAGER))))
 
 
 async def pre():

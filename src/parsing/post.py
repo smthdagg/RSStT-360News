@@ -200,6 +200,11 @@ class Post:
                     if msg_count_new != msg_count_prev:
                         logger.debug(f'{log_header}, disallowed files sent as album and retrying')
                         continue
+                # X sources are screenshot-only.  Never silently fall back to a
+                # text-only push when the screenshot upload fails.
+                if self.feed_link and '/twitter/user/' in self.feed_link:
+                    logger.error(f'{log_header}, screenshot upload failed; refusing text-only fallback')
+                    raise e
                 logger.error(f'{log_header}, dropped all media and retrying...')
                 self.post_formatter.media.invalidate_all()
             except (SystemExit, KeyboardInterrupt) as e:

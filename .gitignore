@@ -7,6 +7,7 @@ config/*.sqlite3
 config/*.sqlite3.*
 config/*.sqlite3-*
 config/*.session
+config/*.session-journal
 config/*.bak
 config/*.opml.bak*
 config/*.before-merge-*

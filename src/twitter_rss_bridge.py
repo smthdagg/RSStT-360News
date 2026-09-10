@@ -56,6 +56,7 @@ CONFIG_DIR = Path(__file__).parent.parent / "config"
 SESSION_FILE = CONFIG_DIR / "x_session.json"
 BRIDGE_CONFIG = CONFIG_DIR / "xbridge_config.json"
 X_BROWSER_PROFILE = CONFIG_DIR / "x_browser_profile"
+TWEET_IMAGE_DIR = CONFIG_DIR / "tweet_screenshots"
 
 
 def get_cache_ttl():
@@ -84,6 +85,14 @@ def get_bridge_config():
     return {}
 
 
+def configured_x_usernames() -> set[str] | None:
+    """Return the optional X-user allowlist from bridge configuration."""
+    users = get_bridge_config().get('users')
+    if not isinstance(users, list):
+        return None
+    return {str(user).strip().lstrip('@').lower() for user in users if str(user).strip()}
+
+
 def get_failure_backoff():
     try:
         return max(300, int(get_bridge_config().get('failure_backoff', 1800)))
@@ -108,6 +117,7 @@ def get_x_users():
     if not db_path.exists():
         return []
 
+    allowed_users = configured_x_usernames()
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
@@ -126,6 +136,8 @@ def get_x_users():
         for row in rows:
             link = row['link']
             username = extract_username_from_local(link)
+            if allowed_users is not None and username not in allowed_users:
+                continue
             if username and username not in seen_usernames:
                 seen_usernames.add(username)
                 users.append({
@@ -211,6 +223,14 @@ class XAPIWorker:
         try:
             print(f"[XBridge][Browser] 打开 @{username} ...")
             parsed = self.fetcher.fetch_tweets(username)[:FETCH_LIMIT]
+            for tweet in parsed:
+                try:
+                    self.fetcher.capture_tweet_screenshot(tweet['id'], TWEET_IMAGE_DIR)
+                    tweet['screenshot_url'] = (
+                        f"http://127.0.0.1:{PORT}/tweet-image/{tweet['id']}.png"
+                    )
+                except Exception as exc:
+                    print(f"[XBridge][Browser] 推文 {tweet['id']} 截图失败: {exc}")
             print(f"[XBridge][Browser] @{username}: 获取 {len(parsed)} 条推文")
             self._last_fetch_ok = True
             self._last_error = None
@@ -294,6 +314,9 @@ def generate_rss(username: str, tweets: list) -> str:
         description = text
 
         media_links = []
+        screenshot_url = tweet.get('screenshot_url')
+        if screenshot_url:
+            media_links.append(f'<img src="{xml_escape(screenshot_url)}" />')
         for m in tweet.get('media', []):
             if m['type'] == 'photo':
                 media_links.append(f'<img src="{xml_escape(m["url"])}" />')
@@ -319,6 +342,9 @@ def generate_rss(username: str, tweets: list) -> str:
                         description += f'\n<img src="{xml_escape(m["url"])}" />'
 
         enclosures = []
+        if screenshot_url:
+            enclosures.append(
+                f'<enclosure url="{xml_escape(screenshot_url)}" type="image/png" length="0"/>')
         media_list = tweet.get('media', [])
         if not media_list and rt:
             media_list = rt.get('media', [])
@@ -511,6 +537,10 @@ class RSSBridgeHandler(BaseHTTPRequestHandler):
             if not username:
                 self._send_error(400, 'Missing username')
                 return
+            allowed_users = configured_x_usernames()
+            if allowed_users is not None and username.lower() not in allowed_users:
+                self._send_error(404, 'X user is not enabled')
+                return
 
             with cache_lock:
                 if username in cache and cache[username]['rss']:
@@ -546,6 +576,21 @@ class RSSBridgeHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(empty_rss.encode('utf-8'))
+
+        elif path.startswith('/tweet-image/'):
+            filename = path.rsplit('/', 1)[-1]
+            if not re.fullmatch(r'\d+\.png', filename):
+                self._send_error(404, 'Not found')
+                return
+            image_path = TWEET_IMAGE_DIR / filename
+            if not image_path.is_file():
+                self._send_error(404, 'Not found')
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/png')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.end_headers()
+            self.wfile.write(image_path.read_bytes())
 
         elif path == '/users':
             users = get_x_users()

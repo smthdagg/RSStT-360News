@@ -255,6 +255,10 @@ def should_refresh_cache_entry(
 class XBrowserFetcher:
     """Single-threaded Camoufox session used by the bridge worker."""
 
+    SCREENSHOT_FONT_CSS = (
+        '"PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif'
+    )
+
     def __init__(
         self,
         *,
@@ -333,6 +337,48 @@ class XBrowserFetcher:
     def _is_timeline_response(response: Any) -> bool:
         return any(f"/{operation}" in response.url for operation in TIMELINE_OPERATIONS)
 
+    def _fetch_tweets_from_dom(self) -> list[dict[str, Any]]:
+        """Fallback for X pages whose current GraphQL operation is renamed."""
+        tweets = []
+        seen_ids = set()
+        for article in self._page.locator("article").all():
+            for button in article.locator("button").all():
+                try:
+                    label = button.inner_text().strip().lower()
+                    if label in {"显示更多", "show more"}:
+                        button.click(timeout=1_000)
+                except Exception:
+                    continue
+            href = next(
+                (
+                    link.get_attribute("href")
+                    for link in article.locator("a[href*='/status/']").all()
+                    if link.get_attribute("href")
+                ),
+                None,
+            )
+            match = re.search(r"/status/(\d+)", href or "")
+            if not match or match.group(1) in seen_ids:
+                continue
+            tweet_id = match.group(1)
+            media = []
+            for image in article.locator("img").all():
+                image_url = image.get_attribute("src") or ""
+                if "pbs.twimg.com/media/" in image_url:
+                    media.append({"type": "photo", "url": image_url})
+            tweets.append(
+                {
+                    "id": tweet_id,
+                    "url": f"https://x.com/i/web/status/{tweet_id}",
+                    "text": article.inner_text().strip(),
+                    "date": datetime.now(timezone.utc),
+                    "date_rss": datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000"),
+                    "media": media,
+                }
+            )
+            seen_ids.add(tweet_id)
+        return tweets
+
     def fetch_tweets(self, username: str) -> list[dict[str, Any]]:
         self.start()
         username = username.strip().lstrip("@").lower()
@@ -372,6 +418,11 @@ class XBrowserFetcher:
             current_url = str(getattr(self._page, "url", ""))
             if "/login" in current_url or "/i/flow/login" in current_url:
                 raise XAuthExpiredError("X redirected the persistent session to login") from exc
+            fallback_tweets = self._fetch_tweets_from_dom()
+            if fallback_tweets:
+                self.last_error = None
+                self.last_success_at = time.time()
+                return fallback_tweets
             self.last_error = str(exc)
             raise XBrowserError(f"Failed to fetch @{username}: {exc}") from exc
 
@@ -380,6 +431,52 @@ class XBrowserFetcher:
         self.start()
         self._page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_seconds * 1_000)
         return self._page
+
+    def capture_tweet_screenshot(self, tweet_id: str, image_dir: Path) -> Path:
+        """Save one fully rendered tweet image; existing captures are reused."""
+        if not re.fullmatch(r"\d+", tweet_id):
+            raise ValueError(f"Invalid tweet id: {tweet_id!r}")
+        image_dir.mkdir(parents=True, exist_ok=True)
+        image_path = image_dir / f"{tweet_id}.png"
+        if image_path.exists():
+            return image_path
+        self.start()
+        page = self._context.new_page()
+        try:
+            page.set_default_timeout(self.timeout_seconds * 1_000)
+            page.goto(
+                f"https://x.com/i/web/status/{tweet_id}",
+                wait_until="domcontentloaded",
+                timeout=self.timeout_seconds * 1_000,
+            )
+            article = page.locator("article").first
+            article.wait_for(state="visible", timeout=self.timeout_seconds * 1_000)
+            page.add_style_tag(content=f"article, article * {{ font-family: {self.SCREENSHOT_FONT_CSS} !important; }}")
+
+            # X streams quoted tweets and media after the outer article is visible.
+            # Expand collapsed text before waiting for the final layout.
+            for button in article.locator("button").all():
+                try:
+                    if button.inner_text().strip().lower() in {"显示更多", "show more"}:
+                        button.click(timeout=1_000)
+                except Exception:
+                    continue
+            try:
+                page.wait_for_function(
+                    """article => [...article.querySelectorAll('img')]
+                    .filter(img => img.src.includes('pbs.twimg.com'))
+                    .every(img => img.complete && img.naturalWidth > 0)""",
+                    article,
+                    timeout=8_000,
+                )
+            except Exception:
+                # Some tweets have no media, and X can keep background requests open.
+                pass
+            page.wait_for_timeout(2_000)
+            article.screenshot(path=str(image_path))
+            return image_path
+        finally:
+            page.close()
 
     def save_session_cookies(self) -> int:
         """Save only X-owned browser cookies to the bridge session file."""

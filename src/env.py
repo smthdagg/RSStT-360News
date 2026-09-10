@@ -235,6 +235,28 @@ SAMPLE_APIS: Final = {
 API_ID: Final = int(os.environ['API_ID']) if os.environ.get('API_ID') else None
 API_HASH: Final = os.environ.get('API_HASH')
 TOKEN: Final = os.environ.get('TOKEN')
+ROUTED_BOT_TOKEN: Final = os.environ.get('ROUTED_BOT_TOKEN')
+_legacy_routed_feeds = set(__list_parser(os.environ.get('ROUTED_BOT_FEEDS')))
+ROUTED_BOT_FEEDS: Final = set(_legacy_routed_feeds)
+# UI-managed source routing.  Keep .env compatible while allowing the app to
+# edit routing without exposing the whole environment file.
+try:
+    _route_file = Path(config_folder_path) / 'push_routes.json'
+    if _route_file.is_file():
+        import json as _json
+        _routes = _json.loads(_route_file.read_text(encoding='utf-8'))
+        # The UI-managed file is authoritative; legacy ROUTED_BOT_FEEDS is
+        # only used as a one-time migration when the file does not exist.
+        ROUTED_BOT_FEEDS.clear()
+        ROUTED_BOT_FEEDS.update(
+            str(rule.get('pattern', '')).strip().lower()
+            for rule in _routes.get('rules', [])
+            if rule.get('bot') == 'secondary' and rule.get('pattern')
+        )
+        if _routes.get('defaultBot') == 'secondary':
+            ROUTED_BOT_FEEDS.add('*')
+except Exception as _route_error:
+    logger.warning('Unable to read push_routes.json: %s', _route_error)
 
 try:
     _manager = tuple(map(int, __list_parser(os.environ.get('MANAGER') or os.environ.get('CHATID'))))
@@ -245,6 +267,13 @@ try:
         exit(1)
 except Exception as e:
     logger.critical('INVALID "MANAGER"! PLEASE CHECK YOUR SETTINGS!', exc_info=e)
+    exit(1)
+
+try:
+    _routed_manager = tuple(map(int, __list_parser(os.environ.get('ROUTED_MANAGER'))))
+    ROUTED_MANAGER: Final = set(_routed_manager or _manager)
+except Exception as e:
+    logger.critical('INVALID "ROUTED_MANAGER"!', exc_info=e)
     exit(1)
 
 _error_logging_chat = os.environ.get('ERROR_LOGGING_CHAT')

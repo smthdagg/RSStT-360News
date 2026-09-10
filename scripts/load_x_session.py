@@ -29,11 +29,60 @@ DEFAULT_EXPORT = Path.home() / "Downloads" / "cookies.json"
 LOG_FILE = Path("/private/tmp/xbridge_camoufox.log")
 
 
+def parse_netscape_cookie_export(raw: str) -> list[dict[str, object]]:
+    """Parse the standard seven-column browser cookie export format."""
+    cookies = []
+    for line in raw.splitlines():
+        http_only = line.startswith("#HttpOnly_")
+        if line.startswith("#") and not http_only:
+            continue
+        fields = line.removeprefix("#HttpOnly_").split("\t")
+        if len(fields) != 7:
+            continue
+        domain, _, path, secure, expires, name, value = fields
+        try:
+            expires_at = int(expires)
+        except ValueError:
+            continue
+        cookies.append(
+            {
+                "domain": domain,
+                "path": path or "/",
+                "secure": secure.upper() == "TRUE",
+                "httpOnly": http_only,
+                "expires": expires_at,
+                "name": name,
+                "value": value,
+            }
+        )
+    return cookies
+
+
+def parse_cookie_header(raw: str) -> list[dict[str, object]]:
+    """Parse a DevTools ``name=value; name2=value2`` cookie header."""
+    cookies = []
+    for part in raw.split(';'):
+        if '=' not in part:
+            continue
+        name, value = part.split('=', 1)
+        if name.strip():
+            cookies.append({'domain': '.x.com', 'path': '/', 'secure': True,
+                            'name': name.strip(), 'value': value.strip()})
+    return cookies
+
+
 def import_cookie_export(path: Path) -> int:
-    raw = json.loads(path.read_text())
-    source = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+    text = path.read_text()
+    verification_error = None
+    try:
+        raw = json.loads(text)
+        source = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+    except json.JSONDecodeError:
+        source = parse_netscape_cookie_export(text)
+        if not source and '=' in text:
+            source = parse_cookie_header(text)
     if not isinstance(source, list):
-        raise ValueError("cookie export must be a JSON list or contain a cookies list")
+        raise ValueError("cookie export must be JSON or Netscape cookie text")
     cookies = sanitize_x_cookies(source)
     names = {cookie["name"] for cookie in cookies}
     if "auth_token" not in names or "ct0" not in names:
@@ -100,6 +149,9 @@ def main() -> int:
         if not tweets:
             raise RuntimeError(f"@{args.account} 时间线为空")
         print(f"✓ 会话验证成功：@{args.account} 获取 {len(tweets)} 条，HTTP {fetcher.last_status}")
+    except Exception as exc:
+        verification_error = exc
+        print(f"⚠ 会话已导入，但 @{args.account} 验证未完成：{exc}")
     finally:
         fetcher.close()
 
@@ -111,7 +163,7 @@ def main() -> int:
     print(f"✓ Camoufox Bridge 已重启（PID {pid}）")
     print("  健康检查: http://127.0.0.1:1200/health")
     print(f"  日志: {LOG_FILE}")
-    return 0
+    return 1 if verification_error else 0
 
 
 if __name__ == "__main__":
