@@ -417,9 +417,45 @@ class XBrowserFetcher:
                     wait_until="domcontentloaded",
                     timeout=self.timeout_seconds * 1_000,
                 )
+            profile_name = ""
+            try:
+                for selector in (
+                    "[data-testid='UserName']",
+                    "article [data-testid='User-Name']",
+                    f"a[href='/{username}']",
+                ):
+                    try:
+                        profile_text = self._page.locator(selector).first.inner_text(timeout=2_000)
+                    except Exception:
+                        continue
+                    profile_name = next(
+                        (line.strip() for line in profile_text.splitlines()
+                         if line.strip() and not line.strip().startswith("@")),
+                        "",
+                    )
+                    if profile_name:
+                        break
+            except Exception:
+                pass
+            if not profile_name:
+                try:
+                    title = self._page.title()
+                    profile_name = re.split(r"\s+\(@|\s+/\s+X$", title, maxsplit=1)[0].strip()
+                except Exception:
+                    pass
             response = response_info.value
             self.last_status = response.status
             payload = response.json()
+            profile_result = (((payload.get("data") or {}).get("user") or {}).get("result") or {})
+            profile_legacy = profile_result.get("legacy") or {}
+            profile_core = profile_result.get("core") or {}
+            profile_name = (
+                profile_name
+                or profile_core.get("name")
+                or profile_legacy.get("name")
+                or profile_result.get("name")
+                or ""
+            )
             classification = classify_x_response(response.status, payload)
             if classification == "auth_expired":
                 raise XAuthExpiredError("X browser session is no longer authenticated")
@@ -434,6 +470,9 @@ class XBrowserFetcher:
                 if not tweet.get("user", {}).get("screen_name")
                 or tweet.get("user", {}).get("screen_name", "").lower() == username
             ]
+            for tweet in tweets:
+                if profile_name and not tweet.get("user", {}).get("name"):
+                    tweet.setdefault("user", {})["name"] = profile_name
             tweets.sort(key=lambda tweet: tweet.get("date") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
             if not tweets and payload.get("errors"):
                 raise XBrowserError(f"X timeline error: {payload['errors'][0].get('message', 'unknown')}")

@@ -229,6 +229,7 @@ class XAPIWorker:
                     tweet['screenshot_url'] = (
                         f"http://127.0.0.1:{PORT}/tweet-image/{tweet['id']}.png"
                     )
+                    tweet['screenshot_time'] = datetime.now(timezone.utc)
                 except Exception as exc:
                     print(f"[XBridge][Browser] 推文 {tweet['id']} 截图失败: {exc}")
             print(f"[XBridge][Browser] @{username}: 获取 {len(parsed)} 条推文")
@@ -295,6 +296,49 @@ def timestamp_to_rss_date(dt):
     return dt.strftime('%a, %d %b %Y %H:%M:%S +0000')
 
 
+def _display_time(value):
+    if not value:
+        return '未知'
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone().strftime('%Y-%m-%d %H:%M:%S %z')
+
+
+def _display_delay(published, delivered):
+    if not published or not delivered:
+        return '未知'
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=timezone.utc)
+    if delivered.tzinfo is None:
+        delivered = delivered.replace(tzinfo=timezone.utc)
+    seconds = max(0, int((delivered - published).total_seconds()))
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    parts = []
+    if hours:
+        parts.append(f'{hours}小时')
+    if minutes:
+        parts.append(f'{minutes}分钟')
+    if seconds or not parts:
+        parts.append(f'{seconds}秒')
+    return ''.join(parts)
+
+
+def _tweet_metadata(tweet, delivered_at):
+    user = tweet.get('user') or {}
+    handle = user.get('screen_name')
+    name = user.get('name') or {'daydayuplift': '天天乐'}.get((handle or '').lower()) or '未知作者'
+    author = f'{name} (@{handle})' if handle else name
+    published = tweet.get('date')
+    return '\n'.join((
+        f'作者：{author}',
+        f'发文时间：{_display_time(published)}',
+        f'截图推送时间：{_display_time(delivered_at)}',
+        f'时间差：{_display_delay(published, delivered_at)}',
+        f'原文链接：{tweet.get("url", "")}',
+    ))
+
+
 def generate_rss(username: str, tweets: list) -> str:
     """Generate RSS XML from a list of parsed tweet dicts."""
     now = datetime.now(timezone.utc)
@@ -311,7 +355,8 @@ def generate_rss(username: str, tweets: list) -> str:
 
         pub_date = tweet.get('date_rss', now_rss)
         text = tweet['text']
-        description = text
+        delivered_at = tweet.get('screenshot_time') or now
+        description = _tweet_metadata(tweet, delivered_at) + '\n\n' + text
 
         media_links = []
         screenshot_url = tweet.get('screenshot_url')

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from src.twitter_rss_bridge import configured_x_usernames, generate_rss
@@ -34,6 +35,18 @@ class XBridgeImageTests(unittest.TestCase):
         self.assertIn("main", rss)
         self.assertNotIn("old retweet", rss)
         self.assertNotIn("Quote:", rss)
+
+    def test_rss_includes_x_tweet_metadata_with_delivery_delay(self):
+        rss = generate_rss("daydayuplift", [{
+            "id": "125", "url": "https://x.com/i/web/status/125", "text": "main",
+            "date": datetime(2026, 9, 10, 4, 0, tzinfo=timezone.utc),
+            "screenshot_time": datetime(2026, 9, 10, 4, 5, 7, tzinfo=timezone.utc),
+            "user": {"name": "天天乐", "screen_name": "daydayuplift"},
+        }])
+        self.assertIn("作者：天天乐 (@daydayuplift)", rss)
+        self.assertIn("截图推送时间：", rss)
+        self.assertIn("时间差：5分钟7秒", rss)
+        self.assertIn("原文链接：https://x.com/i/web/status/125", rss)
 
 
 if __name__ == "__main__":
