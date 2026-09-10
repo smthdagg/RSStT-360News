@@ -221,6 +221,23 @@ class PostFormatter:
                 if not self.parsed:  # double check
                     await self.parse_html()
 
+        # X posts are delivered as a screenshot with a short metadata caption.
+        # The tweet body is already inside the screenshot; repeating it makes
+        # the Telegram message noisy and can produce an invalid-media footer.
+        if self.feed_link and '/twitter/user/' in self.feed_link:
+            meta_parts = []
+            if self.pub_time:
+                meta_parts.append(f'📅 {_fmt_bj(self.pub_time)}')
+                if self.push_time:
+                    meta_parts.append(f'🚀 {_fmt_bj(self.push_time)}')
+                    meta_parts.append(f'⏱ {_time_diff_str(self.pub_time, self.push_time)}')
+            if self.link:
+                escaped_link = html_escape(self.link, quote=True)
+                meta_parts.append(f'🔗 原文：<a href="{escaped_link}">{escaped_link}</a>')
+            result = ('\n'.join(meta_parts), bool(self.media and display_media != DISABLE), False)
+            self.__post_bucket[param_hash] = result
+            return result
+
         # ---- determine via_type ----
         if display_via == COMPLETELY_DISABLE or not (sub_title or self.link):
             via_type = NO_VIA

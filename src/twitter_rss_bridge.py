@@ -361,8 +361,8 @@ def generate_rss(username: str, tweets: list) -> str:
 
         media_links = []
         screenshot_url = tweet.get('screenshot_url')
-        if screenshot_url:
-            media_links.append(f'<img src="{xml_escape(screenshot_url)}" />')
+        # The screenshot is carried by the RSS enclosure.  Do not also put it
+        # in HTML content, otherwise RSStT parses and sends it twice.
         # X posts use the complete browser screenshot as the only media.
         # Sending the original X media as a second enclosure makes Telegram
         # show the wrong image or a mixed media group.
