@@ -25,6 +25,16 @@ class XBridgeImageTests(unittest.TestCase):
 
         self.assertIn('enclosure url="http://127.0.0.1:1200/tweet-image/123.png" type="image/png"', rss)
 
+    def test_rss_keeps_only_main_tweet_text(self):
+        rss = generate_rss("daydayuplift", [{
+            "id": "124", "url": "https://x.com/i/web/status/124", "text": "main",
+            "quoted_tweet": {"url": "https://x.com/i/web/status/old"},
+            "retweeted_tweet": {"text": "old retweet", "user": {"screen_name": "someone"}},
+        }])
+        self.assertIn("main", rss)
+        self.assertNotIn("old retweet", rss)
+        self.assertNotIn("Quote:", rss)
+
 
 if __name__ == "__main__":
     unittest.main()

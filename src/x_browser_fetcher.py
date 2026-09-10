@@ -124,8 +124,9 @@ def extract_tweets_from_timeline(api_response: dict[str, Any]) -> list[dict[str,
     seen_ids: set[str] = set()
     for instruction in instructions:
         entries = instruction.get("entries", [])
-        if instruction.get("type") == "TimelinePinEntry" and instruction.get("entry"):
-            entries = [instruction["entry"]]
+        # Pinned tweets can be years old; they are not new timeline posts.
+        if instruction.get("type") == "TimelinePinEntry":
+            continue
         for entry in entries:
             content = entry.get("content", {})
             item_content = content.get("itemContent", {})
@@ -323,6 +324,7 @@ class XBrowserFetcher:
             humanize=True,
             locale="zh-CN",
             enable_cache=True,
+            device_scale_factor=2,
         )
         try:
             self._context = self._manager.__enter__()
@@ -337,7 +339,7 @@ class XBrowserFetcher:
     def _is_timeline_response(response: Any) -> bool:
         return any(f"/{operation}" in response.url for operation in TIMELINE_OPERATIONS)
 
-    def _fetch_tweets_from_dom(self) -> list[dict[str, Any]]:
+    def _fetch_tweets_from_dom(self, username: str) -> list[dict[str, Any]]:
         """Fallback for X pages whose current GraphQL operation is renamed."""
         tweets = []
         seen_ids = set()
@@ -361,6 +363,25 @@ class XBrowserFetcher:
             if not match or match.group(1) in seen_ids:
                 continue
             tweet_id = match.group(1)
+            author = ""
+            author_link = article.locator("a[href^='/']").first
+            try:
+                href = author_link.get_attribute("href") or ""
+                if re.fullmatch(r"/[A-Za-z0-9_]{1,15}", href):
+                    author = href[1:].lower()
+            except Exception:
+                pass
+            if author and author != username:
+                continue
+            time_node = article.locator("time").first
+            timestamp = time_node.get_attribute("datetime") if time_node else None
+            try:
+                date = datetime.fromisoformat(timestamp.replace("Z", "+00:00")) if timestamp else None
+            except (TypeError, ValueError):
+                date = None
+            if date is None:
+                # Without X's absolute timestamp, do not fabricate a current date.
+                continue
             media = []
             for image in article.locator("img").all():
                 image_url = image.get_attribute("src") or ""
@@ -371,8 +392,9 @@ class XBrowserFetcher:
                     "id": tweet_id,
                     "url": f"https://x.com/i/web/status/{tweet_id}",
                     "text": article.inner_text().strip(),
-                    "date": datetime.now(timezone.utc),
-                    "date_rss": datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000"),
+                    "date": date,
+                    "date_rss": date.astimezone(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000"),
+                    "user": {"screen_name": author or username},
                     "media": media,
                 }
             )
@@ -407,6 +429,12 @@ class XBrowserFetcher:
             raw_tweets = extract_tweets_from_timeline(payload)
             tweets = [parse_tweet_to_dict(tweet) for tweet in raw_tweets]
             tweets = [tweet for tweet in tweets if tweet["id"] and tweet["text"]]
+            tweets = [
+                tweet for tweet in tweets
+                if not tweet.get("user", {}).get("screen_name")
+                or tweet.get("user", {}).get("screen_name", "").lower() == username
+            ]
+            tweets.sort(key=lambda tweet: tweet.get("date") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
             if not tweets and payload.get("errors"):
                 raise XBrowserError(f"X timeline error: {payload['errors'][0].get('message', 'unknown')}")
             self.last_error = None
@@ -418,7 +446,7 @@ class XBrowserFetcher:
             current_url = str(getattr(self._page, "url", ""))
             if "/login" in current_url or "/i/flow/login" in current_url:
                 raise XAuthExpiredError("X redirected the persistent session to login") from exc
-            fallback_tweets = self._fetch_tweets_from_dom()
+            fallback_tweets = self._fetch_tweets_from_dom(username)
             if fallback_tweets:
                 self.last_error = None
                 self.last_success_at = time.time()
@@ -438,12 +466,17 @@ class XBrowserFetcher:
             raise ValueError(f"Invalid tweet id: {tweet_id!r}")
         image_dir.mkdir(parents=True, exist_ok=True)
         image_path = image_dir / f"{tweet_id}.png"
-        if image_path.exists():
+        version_marker = image_dir / f"{tweet_id}.png.capture-v15"
+        if image_path.exists() and version_marker.exists():
             return image_path
         self.start()
         page = self._context.new_page()
         try:
             page.set_default_timeout(self.timeout_seconds * 1_000)
+            try:
+                page.emulate_media(color_scheme="dark")
+            except Exception:
+                pass
             page.goto(
                 f"https://x.com/i/web/status/{tweet_id}",
                 wait_until="domcontentloaded",
@@ -451,7 +484,42 @@ class XBrowserFetcher:
             )
             article = page.locator("article").first
             article.wait_for(state="visible", timeout=self.timeout_seconds * 1_000)
-            page.add_style_tag(content=f"article, article * {{ font-family: {self.SCREENSHOT_FONT_CSS} !important; }}")
+            # Keep the complete outer tweet, including quote/reply cards. Remove
+            # fixed page chrome and height clamps that otherwise crop long posts.
+            page.add_style_tag(content="""
+                [data-testid='TopNavBar'], [data-testid='AppTabBar'],
+                div[role='banner'], button[aria-label*='返回'],
+                button[aria-label*='Back'] { display: none !important; }
+                article { background: #000 !important; color: #e7e9ea !important; padding-left: 16px !important; padding-right: 16px !important; }
+                article, article * { font-family: __SCREENSHOT_FONT__, "Apple Color Emoji", "Segoe UI Emoji", sans-serif !important; }
+                article [data-testid='User-Name'],
+                article [data-testid='User-Name'] * { color: #e7e9ea !important; }
+                article [data-testid='User-Name'] a[href^='/'] { color: #71767b !important; }
+                article [data-testid='User-Name'] svg { color: #1d9bf0 !important; fill: #1d9bf0 !important; }
+                article, article * { color: #e7e9ea !important; }
+                article div[dir='auto'], article span[dir='auto'] { color: #e7e9ea !important; }
+                article > div div, article > div span { color: #e7e9ea !important; opacity: 1 !important; }
+                article [data-testid='User-Name'] a[href^='/'] { color: #71767b !important; }
+                article [data-testid='User-Name'] svg { color: #1d9bf0 !important; fill: #1d9bf0 !important; }
+                article time { color: #71767b !important; }
+                article, article * { max-height: none !important; }
+                article { overflow: visible !important; }
+            """.replace("__SCREENSHOT_FONT__", self.SCREENSHOT_FONT_CSS))
+            page.evaluate("""() => {
+                document.querySelectorAll('button[aria-label*="返回"], button[aria-label*="Back"]').forEach((el) => el.style.display = 'none');
+                document.querySelectorAll('[role="heading"]').forEach((el) => {
+                    if (/^(帖子|post)$/i.test((el.innerText || '').trim())) el.style.display = 'none';
+                });
+                const article = document.querySelector('article');
+                document.querySelectorAll('*').forEach((el) => {
+                    const style = getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    if ((style.position === 'fixed' || style.position === 'sticky') && !el.contains(article) &&
+                        rect.top <= 2 && rect.height > 0 && rect.height < 120 && rect.width > 300) {
+                        el.style.display = 'none';
+                    }
+                });
+            }""")
 
             # X streams quoted tweets and media after the outer article is visible.
             # Expand collapsed text before waiting for the final layout.
@@ -473,7 +541,10 @@ class XBrowserFetcher:
                 # Some tweets have no media, and X can keep background requests open.
                 pass
             page.wait_for_timeout(2_000)
-            article.screenshot(path=str(image_path))
+            # Use device pixels so macOS/Retina captures retain the same sharp
+            # typography and roughly 2x resolution as the reference screenshot.
+            article.screenshot(path=str(image_path), scale="device")
+            version_marker.write_text("v15", encoding="utf-8")
             return image_path
         finally:
             page.close()

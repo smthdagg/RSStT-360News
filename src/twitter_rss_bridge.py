@@ -327,27 +327,11 @@ def generate_rss(username: str, tweets: list) -> str:
         if media_links:
             description += '\n\n' + '\n'.join(media_links)
 
-        quoted = tweet.get('quoted_tweet')
-        if quoted and quoted.get('url'):
-            description += f'\n\n🔗 Quote: {quoted["url"]}'
-
-        rt = tweet.get('retweeted_tweet')
-        if rt:
-            rt_user = rt.get('user', {}).get('screen_name', '')
-            rt_text = rt.get('text', '')
-            description = f'🔁 RT @{rt_user}: {rt_text}'
-            if rt.get('media'):
-                for m in rt['media']:
-                    if m['type'] == 'photo':
-                        description += f'\n<img src="{xml_escape(m["url"])}" />'
-
         enclosures = []
         if screenshot_url:
             enclosures.append(
                 f'<enclosure url="{xml_escape(screenshot_url)}" type="image/png" length="0"/>')
         media_list = tweet.get('media', [])
-        if not media_list and rt:
-            media_list = rt.get('media', [])
         for m in media_list:
             if m['type'] == 'photo':
                 enclosures.append(

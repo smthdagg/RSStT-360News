@@ -114,6 +114,12 @@ class TimelineParsingTests(unittest.TestCase):
             parsed["date"], datetime(2026, 7, 22, 1, 2, 3, tzinfo=timezone.utc)
         )
 
+    def test_skips_pinned_tweet_entries(self):
+        response = {"data": {"user": {"result": {"timeline": {"timeline": {
+            "instructions": [{"type": "TimelinePinEntry", "entry": {"content": {}}}]
+        }}}}}}
+        self.assertEqual(extract_tweets_from_timeline(response), [])
+
 
 class SchedulingTests(unittest.TestCase):
     def test_failed_entries_wait_for_backoff_instead_of_refetching_immediately(self):
