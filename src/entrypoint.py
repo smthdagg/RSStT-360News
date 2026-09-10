@@ -48,7 +48,7 @@ from .i18n import i18n, ALL_LANGUAGES, get_commands_list
 from .parsing import tgraph
 from .helpers.bg import bg
 from .helpers.queue import queued
-from .bot_router import BotRouter
+from .bot_router import BotRouter, is_secondary_feed
 
 # log
 logger = log.getLogger('RSStT')
@@ -139,12 +139,54 @@ def init():
 
         secondary_peer = loop.run_until_complete(secondary_bot.get_me(input_peer=False))
 
+        async def configure_secondary_group(chat_id: int, actor_id: int):
+            """Make an authorized group an automatic target for routed feeds."""
+            group, _ = await db.User.get_or_create(
+                id=chat_id,
+                defaults={'state': 51, 'admin': actor_id},
+            )
+            if group.state != 51 or group.admin != actor_id:
+                group.state = 51
+                group.admin = actor_id
+                await group.save(update_fields={'state', 'admin'})
+
+            feeds = await db.Feed.filter(state=1)
+            defaults = {
+                'title': None,
+                'interval': None,
+                'notify': -100,
+                'send_mode': -100,
+                'length_limit': -100,
+                'link_preview': -100,
+                'display_author': -100,
+                'display_via': -100,
+                'display_title': -100,
+                'display_entry_tags': -100,
+                'style': -100,
+                'display_media': -100,
+            }
+            added = 0
+            for feed in feeds:
+                if not is_secondary_feed(feed.link, env.ROUTED_BOT_FEEDS):
+                    continue
+                _, created = await db.Sub.get_or_create(user_id=chat_id, feed_id=feed.id, defaults=defaults)
+                added += int(created)
+            logger.info('Secondary bot group %s configured: %s routed feed(s) added', chat_id, added)
+
         async def guard_secondary_group_add(event):
-            if not event.user_added or event.user_id != secondary_peer.id:
+            if event.user_id != secondary_peer.id:
+                return
+            if event.user_left:
+                await db.Sub.filter(user_id=event.chat_id).delete()
+                await db.User.filter(id=event.chat_id, state=51).delete()
+                logger.info('Secondary bot removed from group %s; subscriptions removed', event.chat_id)
+                return
+            if not event.user_added:
                 return
             actor = event.added_by
             actor_id = getattr(actor, 'id', actor) if actor is not True else None
             if actor_id in env.ROUTED_MANAGER:
+                await configure_secondary_group(event.chat_id, actor_id)
                 return
             try:
                 await event.client.delete_dialog(event.chat_id)

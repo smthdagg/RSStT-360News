@@ -1,6 +1,6 @@
 import unittest
 
-from src.bot_router import _active_route, route_for_feed, x_username_from_feed
+from src.bot_router import _active_route, route_for_feed, x_username_from_feed, is_secondary_feed
 
 
 class BotRouterTests(unittest.TestCase):
@@ -17,6 +17,12 @@ class BotRouterTests(unittest.TestCase):
             self.assertEqual(_active_route.get(), "secondary")
         with route_for_feed("https://example.test/other.xml", {"*"}):
             self.assertEqual(_active_route.get(), "secondary")
+
+    def test_secondary_feed_matches_x_username(self):
+        self.assertTrue(is_secondary_feed(
+            "http://127.0.0.1:1200/twitter/user/daydayuplift", {"daydayuplift"}))
+        self.assertFalse(is_secondary_feed(
+            "http://127.0.0.1:1200/twitter/user/other", {"daydayuplift"}))
 
 
 if __name__ == "__main__":

@@ -15,11 +15,15 @@ def x_username_from_feed(feed_link: str | None) -> str | None:
     return match.group(1).lower() if match else None
 
 
+def is_secondary_feed(feed_link: str | None, secondary_feeds: set[str]) -> bool:
+    key = (feed_link or '').strip().lower()
+    username = x_username_from_feed(feed_link)
+    return '*' in secondary_feeds or key in secondary_feeds or (username and username in secondary_feeds)
+
+
 @contextmanager
 def route_for_feed(feed_link: str | None, secondary_feeds: set[str]) -> Iterator[None]:
-    username = x_username_from_feed(feed_link)
-    key = (feed_link or '').strip().lower()
-    token = _active_route.set("secondary" if '*' in secondary_feeds or key in secondary_feeds or (username and username in secondary_feeds) else "primary")
+    token = _active_route.set("secondary" if is_secondary_feed(feed_link, secondary_feeds) else "primary")
     try:
         yield
     finally:
