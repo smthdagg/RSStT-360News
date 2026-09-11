@@ -28,8 +28,12 @@ python-socks[asyncio]==2.7.1
 dnspython[idna]==2.7.0
 httpx==0.28.1
 
-# X (Twitter) browser backend - Camoufox Firefox fork + Playwright interface
-cloverlabs-camoufox==0.6.0
+# X (Twitter) browser backend - Camoufox Firefox fork + Playwright interface.
+# Camoufox publishes nothing for Python 3.9 (every release needs >=3.10), so the
+# marker keeps the 3.9 CI row installable.  The browser backend imports camoufox
+# lazily and raises a readable XBrowserError when it is missing, so 3.9 simply
+# runs without the X browser path.
+cloverlabs-camoufox==0.6.0; python_version >= "3.10"
 
 # utils
 yarl==1.20.1
