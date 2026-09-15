@@ -9,7 +9,7 @@ import sqlite3
 from pathlib import Path
 
 RSSTT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_DIR = RSSTT_ROOT / 'config'
+CONFIG_DIR = Path(__import__('os').environ.get('RSSTT_CONFIG_DIR', str(RSSTT_ROOT / 'config')))
 DB_FILE = CONFIG_DIR / 'db.sqlite3'
 VENV_PYTHON = RSSTT_ROOT / '.venv' / 'bin' / 'python'
 

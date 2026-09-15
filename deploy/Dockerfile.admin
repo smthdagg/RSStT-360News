@@ -1,4 +1,5 @@
 FROM python:3.13-slim
 WORKDIR /app
 COPY deploy/admin_server.py .
+COPY scripts/db_query.py .
 CMD ["python", "-u", "admin_server.py"]

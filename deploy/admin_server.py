@@ -92,6 +92,12 @@ class AdminState:
             return {}
 
 
+def db_query(action, *args):
+    result = subprocess.run(["python", "/app/db_query.py", action, *map(str, args)], env={**os.environ, "RSSTT_CONFIG_DIR": "/data/config"}, capture_output=True, text=True, timeout=30)
+    try: return json.loads(result.stdout)
+    except ValueError: return {"ok": False, "error": result.stderr[-500:] or "database query failed"}
+
+
 HTML = """<!doctype html><meta charset=utf-8><title>360News Admin</title>
 <style>body{font:16px system-ui;max-width:900px;margin:40px auto;padding:0 16px}pre{background:#111;color:#eee;padding:16px;overflow:auto}button{padding:8px 14px;margin-right:8px}</style>
 <h1>360News 管理后台</h1><p>只显示脱敏状态，不显示 Token、Cookie 或会话内容。</p>
@@ -129,11 +135,30 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/": return self._send(200, HTML, "text/html; charset=utf-8")
         if self.path == "/api/status": return self._send(200, json.dumps(self.state.snapshot(), ensure_ascii=False))
         if self.path == "/api/users": return self._send(200, json.dumps(self.users.list_public(), ensure_ascii=False))
+        actions = {"/api/subscriptions": "list", "/api/history": "history_list", "/api/bot-users": "users_list", "/api/history/count": "history_count"}
+        if self.path in actions: return self._send(200, json.dumps(db_query(actions[self.path]), ensure_ascii=False))
         self._send(404, '{"error":"not found"}')
 
     def do_POST(self):
         if not self._guard(): return
         if self.headers.get("X-Admin-Confirm") != "1": return self._send(403, '{"error":"confirmation header required"}')
+        if self.path.startswith("/api/subscriptions/"):
+            action = "toggle" if self.headers.get("X-Subscription-Action") == "toggle" else "delete"
+            return self._send(200, json.dumps(db_query(action, self.path.rsplit("/", 1)[-1]), ensure_ascii=False))
+        if self.path == "/api/subscriptions":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+                return self._send(200, json.dumps(db_query("add", body.get("url"), body.get("title", ""), body.get("category", ""), body.get("managerId", "")), ensure_ascii=False))
+            except (ValueError, TypeError): return self._send(400, '{"error":"invalid subscription"}')
+        if self.path == "/api/history/clear": return self._send(200, json.dumps(db_query("history_clear")))
+        if self.path in ("/api/bridge", "/api/routes"):
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+                name = "xbridge_config.json" if self.path == "/api/bridge" else "push_routes.json"
+                if self.path == "/api/routes":
+                    body = {"defaultBot": "secondary" if body.get("defaultBot") == "secondary" else "primary", "rules": [{"pattern": str(x.get("pattern", "")).strip().lower(), "bot": x.get("bot")} for x in body.get("rules", []) if x.get("pattern") and x.get("bot") in ("primary", "secondary")]}
+                target = Path("/data/config") / name; target.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8"); return self._send(200, '{"ok":true,"restartRequired":true}')
+            except (ValueError, OSError, TypeError): return self._send(400, '{"error":"invalid configuration"}')
         if self.path == "/api/users":
             if not getattr(self, "identity", {}).get("is_admin"): return self._send(403, '{"error":"admin role required"}')
             try:
