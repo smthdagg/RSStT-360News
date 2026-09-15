@@ -14,7 +14,19 @@ from src.x_browser_fetcher import (
     XAuthExpiredError,
     XBrowserFetcher,
     XRateLimitedError,
+    _cookie_action_priority,
 )
+
+
+class CookieConsentTests(unittest.TestCase):
+    def test_prefers_rejecting_cookie_consent(self):
+        self.assertGreater(
+            _cookie_action_priority("拒绝非必要 Cookie"),
+            _cookie_action_priority("接受所有 Cookie"),
+        )
+
+    def test_ignores_unrelated_buttons(self):
+        self.assertEqual(_cookie_action_priority("回复"), 0)
 
 
 class CookieSanitizingTests(unittest.TestCase):
