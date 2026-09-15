@@ -403,6 +403,7 @@ class XBrowserFetcher:
 
     def fetch_tweets(self, username: str) -> list[dict[str, Any]]:
         self.start()
+        self.reload_session()
         username = username.strip().lstrip("@").lower()
         if not re.fullmatch(r"[a-z0-9_]{1,15}", username):
             raise ValueError(f"Invalid X username: {username!r}")
@@ -499,6 +500,11 @@ class XBrowserFetcher:
         self._page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_seconds * 1_000)
         return self._page
 
+    def reload_session(self) -> None:
+        """Apply a newly imported session file without restarting Camoufox."""
+        if self._context is not None:
+            self._import_session_if_changed()
+
     def capture_tweet_screenshot(self, tweet_id: str, image_dir: Path) -> Path:
         """Save one fully rendered tweet image; existing captures are reused."""
         if not re.fullmatch(r"\d+", tweet_id):
@@ -509,6 +515,7 @@ class XBrowserFetcher:
         if image_path.exists() and version_marker.exists():
             return image_path
         self.start()
+        self.reload_session()
         page = self._context.new_page()
         try:
             page.set_default_timeout(self.timeout_seconds * 1_000)

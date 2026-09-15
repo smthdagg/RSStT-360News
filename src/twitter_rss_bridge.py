@@ -127,7 +127,7 @@ def get_x_users():
             SELECT DISTINCT s.id, s.tags, s.title, f.link
             FROM sub s
             JOIN feed f ON s.feed_id = f.id
-            WHERE f.link LIKE '%127.0.0.1%'
+            WHERE f.link LIKE '%/twitter/user/%'
             ORDER BY s.tags, s.title
         """)
         rows = cur.fetchall()
@@ -728,7 +728,8 @@ def main():
     worker.start()
     time.sleep(3)
 
-    server = HTTPServer(('127.0.0.1', PORT), RSSBridgeHandler)
+    bind_host = os.environ.get('XBRIDGE_BIND', '127.0.0.1')
+    server = HTTPServer((bind_host, PORT), RSSBridgeHandler)
     print(f"[XBridge] Server listening on http://127.0.0.1:{PORT}")
 
     try:

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from admin_server import AdminState, UserStore, hash_password, verify_password
+from admin_server import AdminState, UserStore, hash_password, parse_cookie_input, verify_password
 
 
 class AdminSecurityTests(unittest.TestCase):
@@ -36,6 +36,16 @@ class AdminSecurityTests(unittest.TestCase):
             self.assertIsNone(store.authenticate("reader", "read-pass-1"))
             store.remove("reader")
             self.assertNotIn("reader", [u["username"] for u in store.list_public()])
+
+    def test_cookie_parser_accepts_json_netscape_and_pairs(self):
+        for raw in (
+            '{"cookies":[{"name":"auth_token","value":"a","domain":".x.com"},{"name":"ct0","value":"b","domain":"x.com"}]}',
+            '.x.com\tTRUE\t/\tTRUE\t0\tauth_token\ta\n.x.com\tTRUE\t/\tTRUE\t0\tct0\tb',
+            'auth_token=a\nct0=b',
+        ):
+            cookies, errors = parse_cookie_input(raw)
+            self.assertEqual({c["name"] for c in cookies}, {"auth_token", "ct0"})
+            self.assertFalse(errors)
 
 
 if __name__ == "__main__":

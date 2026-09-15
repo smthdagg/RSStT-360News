@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from typing import Optional
 
@@ -25,8 +26,9 @@ from .. import env
 logger = logging.getLogger('RSStT.x_health')
 
 # Bridge 端点
-BRIDGE_SESSION_URL = 'http://127.0.0.1:1200/session'
-BRIDGE_HEALTH_URL = 'http://127.0.0.1:1200/health'
+BRIDGE_BASE_URL = os.environ.get('RSSTT_BRIDGE_URL', 'http://127.0.0.1:1200').rstrip('/')
+BRIDGE_SESSION_URL = f'{BRIDGE_BASE_URL}/session'
+BRIDGE_HEALTH_URL = f'{BRIDGE_BASE_URL}/health'
 
 # 告警冷却：同一种告警 2 小时内不重复
 _ALERT_COOLDOWN_S = 2 * 60 * 60

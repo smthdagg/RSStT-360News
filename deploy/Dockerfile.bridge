@@ -1,6 +1,6 @@
 FROM python:3.13-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth fonts-wqy-microhei && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth fonts-wqy-microhei libgtk-3-0 libdbus-glib-1-2 libasound2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

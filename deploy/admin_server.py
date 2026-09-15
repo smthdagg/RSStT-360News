@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Small, private-by-default 360News admin API/UI."""
-import base64, hashlib, hmac, json, os, secrets, subprocess, time
+import base64, hashlib, hmac, json, os, secrets, subprocess, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -19,6 +19,52 @@ def verify_password(password: str, encoded: str) -> bool:
         return hmac.compare_digest(base64.urlsafe_b64encode(actual).decode(), expected)
     except (ValueError, TypeError):
         return False
+
+
+def parse_cookie_input(raw: str) -> tuple[list[dict], list[str]]:
+    """Normalize Cookie-Editor/Playwright JSON, Netscape, or name=value text."""
+    cookies, errors = [], []
+    try:
+        parsed = json.loads(raw)
+        cookies = parsed if isinstance(parsed, list) else parsed.get("cookies", [])
+        if not isinstance(cookies, list):
+            raise ValueError("JSON cookies must be a list")
+    except (ValueError, TypeError, AttributeError):
+        for line_no, line in enumerate(raw.splitlines(), 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            if len(fields) >= 7:
+                try:
+                    cookies.append({"domain": fields[0], "path": fields[2] or "/", "secure": fields[3].upper() == "TRUE",
+                                    "expires": int(fields[4] or -1), "name": fields[5], "value": fields[6]})
+                except ValueError:
+                    errors.append(f"第 {line_no} 行过期时间无效")
+            elif "=" in line:
+                name, value = line.split("=", 1)
+                cookies.append({"domain": ".x.com", "path": "/", "secure": True, "name": name.strip(), "value": value.strip()})
+            else:
+                errors.append(f"第 {line_no} 行无法识别")
+
+    normalized, seen = [], set()
+    for item in cookies:
+        if not isinstance(item, dict):
+            continue
+        name, value = str(item.get("name", "")).strip(), item.get("value")
+        domain = str(item.get("domain", ".x.com")).strip().lower()
+        if not name or value is None or domain.lstrip(".") not in ("x.com", "twitter.com"):
+            continue
+        cookie = {"name": name, "value": str(value), "domain": domain, "path": str(item.get("path") or "/"),
+                  "secure": bool(item.get("secure", True)), "httpOnly": bool(item.get("httpOnly", False))}
+        expires = item.get("expirationDate", item.get("expires"))
+        if isinstance(expires, (int, float)) and expires > 0:
+            cookie["expires"] = expires
+        seen_key = (name, domain, cookie["path"])
+        if seen_key not in seen:
+            normalized.append(cookie)
+            seen.add(seen_key)
+    return normalized, errors
 
 
 class UserStore:
@@ -104,6 +150,18 @@ class AdminState:
                      "manager": values.get("ROUTED_MANAGER", "") or values.get("MANAGER", "")},
         }
 
+    def cookie_view(self):
+        session = self.config_dir / "x_session.json"
+        try:
+            raw = json.loads(session.read_text(encoding="utf-8"))
+            cookies = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+            cookies = cookies if isinstance(cookies, list) else []
+        except (OSError, ValueError):
+            cookies = []
+        names = {str(c.get("name", "")) for c in cookies if isinstance(c, dict)}
+        return {"cookie_count": len(cookies), "has_auth_token": "auth_token" in names,
+                "has_ct0": "ct0" in names, "updated_at": session.stat().st_mtime if session.exists() else None}
+
     def _json(self, name):
         try:
             data = json.loads((self.config_dir / name).read_text(encoding="utf-8"))
@@ -125,16 +183,19 @@ HTML = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=
 <section id=config><h2>Bot 配置</h2><div class=cards><div class=panel><h3>Bot1 主 Bot</h3><div id=bot1State class=label>读取中…</div><input id=bot1Token type=password placeholder="输入新 Bot1 Token（留空不修改）"><input id=bot1Manager placeholder="管理员 ID"><input id=apiId placeholder="API ID"><input id=apiHash type=password placeholder="输入新 API Hash（留空不修改）"><input id=proxy placeholder="Telegram 代理（可留空）"><br><button onclick="saveBot(1)">保存 Bot1</button></div><div class=panel><h3>Bot2 路由 Bot</h3><div id=bot2State class=label>读取中…</div><input id=bot2Token type=password placeholder="输入新 Bot2 Token（留空不修改）"><input id=bot2Manager placeholder="管理员 ID（可留空沿用 Bot1）"><br><button onclick="saveBot(2)">保存 Bot2</button></div></div></section>
 <section id=subs><div class=panel><h2>RSS 来源</h2><div id=subList></div><input id=subUrl placeholder="RSS URL"><input id=subTitle placeholder="标题"><input id=subCat placeholder="分类"><button onclick="addSub()">新增来源</button></div></section>
 <section id=routes><div class=panel><h2>来源 → Bot 路由</h2><p class=label>每条来源独立选择 Bot1 或 Bot2。</p><label>未匹配来源默认发送到 <select id=defaultBot><option value=primary>Bot1</option><option value=secondary>Bot2</option></select></label><div id=routeList></div><input id=routePattern placeholder="来源关键词，例如 daydayuplift"><select id=routeBot><option value=primary>Bot1</option><option value=secondary>Bot2</option></select><button onclick="addRoute()">新增规则</button><br><button onclick="saveRoutes()">保存路由</button></div></section>
-<section id=cookie><div class=panel><h2>X Cookie</h2><p>支持 JSON、Playwright storage_state、Netscape 和 name=value 格式。</p><textarea id=cookieText rows=10 cols=80></textarea><br><button onclick="saveText('/api/cookie','cookieText')">导入 Cookie</button><pre id=cookieResult></pre></div></section>
+<section id=cookie><div class=panel><h2>X Cookie</h2><div id=cookieState class=label>读取中…</div><p>支持 Cookie-Editor/Playwright JSON、Netscape 和 name=value 格式。</p><textarea id=cookieText rows=10 cols=80 placeholder="粘贴 Cookie 内容"></textarea><br><button onclick="previewCookie()">导入/解析</button><button onclick="saveCookie()">保存 Cookie</button><button onclick="validateCookie()">验证当前 Cookie</button><pre id=cookieResult></pre></div></section>
 <section id=history><div class=panel><h2>推送历史</h2><button onclick="loadHistory()">刷新</button><button onclick="act('/api/history/clear')">清空</button><div id=historyText></div></div></section>
 <section id=users><div class=panel><h2>Telegram 用户/群组</h2><input id=telegramId placeholder="Telegram 数字 ID"><button onclick="addTelegram()">添加</button><div id=telegramText></div></div></section>
 <section id=admins><div class=panel><h2>后台账号</h2><input id=u placeholder="用户名"><input id=p type=password placeholder="密码（至少10位）"><button onclick="addUser()">新增账号</button><div id=adminText></div></div></section>
 <section id=logs><h2>运行日志</h2><button onclick="loadLogs()">刷新</button><pre id=logText></pre></section>
 <script>
-async function j(u,o){return await (await fetch(u,o)).json()} function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))} async function tab(x){document.querySelectorAll('section').forEach(e=>e.classList.remove('on'));document.getElementById(x).classList.add('on');if(x==='status')load();if(x==='config')loadConfig();if(x==='subs')loadSubs();if(x==='routes')loadRoutes();if(x==='history')loadHistory();if(x==='users')loadTelegram();if(x==='admins')loadAdmins();if(x==='logs')loadLogs()}
+async function j(u,o){return await (await fetch(u,o)).json()} function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))} async function tab(x){document.querySelectorAll('section').forEach(e=>e.classList.remove('on'));document.getElementById(x).classList.add('on');if(x==='status')load();if(x==='config')loadConfig();if(x==='subs')loadSubs();if(x==='routes')loadRoutes();if(x==='cookie')loadCookie();if(x==='history')loadHistory();if(x==='users')loadTelegram();if(x==='admins')loadAdmins();if(x==='logs')loadLogs()}
 async function load(){let s=await j('/api/status');o.textContent=JSON.stringify(s,null,2);let x=s.xbridge||{},r=s.routes||{},rules=r.rules||[];summary.innerHTML=[['配置状态',s.configured?'已配置':'未配置',s.configured?'ok':'warn'],['X 会话',s.files.includes('x_session.json')?'已导入':'未导入',s.files.includes('x_session.json')?'ok':'warn'],['抓取用户',(x.users||[]).join(', ')||'未设置',''],['抓取间隔',((x.interval||0)/60)+' 分钟','']].map(c=>`<div class=card><div class=label>${c[0]}</div><div class="value ${c[2]}">${c[1]}</div></div>`).join('');detail.innerHTML=`<b>来源路由</b>：${rules.length?rules.map(x=>`${x.pattern} → ${x.bot==='secondary'?'Bot2':'Bot1'}`).join('；'):'未设置'}<br><span class=label>配置目录：${s.config_dir}</span>`} async function act(u){await j(u,{method:'POST',headers:{'X-Admin-Confirm':'1'}});load()} async function saveJson(u,id){let r=await j(u,{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:document.getElementById(id).value});alert(JSON.stringify(r));} async function saveText(u,id){let r=await j(u,{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'text/plain'},body:document.getElementById(id).value});cookieResult.textContent=JSON.stringify(r,null,2)}
 async function loadSubs(){let r=await j('/api/subscriptions');subList.innerHTML=(r.data||[]).map(x=>`<div class=row><b>#${esc(x.id)}</b> ${esc(x.feed_title||x.link)}<br><span class=label>状态：${x.state?'启用':'停用'} · ${esc(x.category||'未分类')}</span> <button onclick="subAct(${x.id},'toggle')">启用/禁用</button><button onclick="subAct(${x.id},'delete')">删除</button></div>`).join('')||'<div class=row>暂无 RSS 来源</div>'} async function subAct(id,a){await j('/api/subscriptions/'+id,{method:'POST',headers:{'X-Admin-Confirm':'1','X-Subscription-Action':a}});loadSubs()} async function addSub(){await j('/api/subscriptions',{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:JSON.stringify({url:subUrl.value,title:subTitle.value,category:subCat.value})});loadSubs()}
 async function loadConfig(){let c=await j('/api/config'),a=c.bot1||{},b=c.bot2||{};bot1State.textContent=`当前：Token ${esc(a.token)} · API Hash ${esc(a.api_hash)} · 管理员 ${esc(a.manager||'未设置')}`;bot2State.textContent=`当前：Token ${esc(b.token)} · 管理员 ${esc(b.manager||'未设置')}`;bot1Manager.value=a.manager||'';apiId.value=a.api_id||'';proxy.value=a.proxy||'';bot2Manager.value=b.manager||''}
+async function loadCookie(){let s=await j('/api/cookie/status');cookieState.textContent=`当前 Cookie：${s.cookie_count||0} 项 · auth_token ${s.has_auth_token?'存在':'缺失'} · ct0 ${s.has_ct0?'存在':'缺失'}`}
+async function cookieRequest(url,body){let r=await j(url,{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'text/plain'},body});cookieResult.textContent=JSON.stringify(r,null,2);loadCookie()}
+async function previewCookie(){await cookieRequest('/api/cookie/validate',cookieText.value)} async function saveCookie(){await cookieRequest('/api/cookie',cookieText.value)} async function validateCookie(){await cookieRequest('/api/cookie/validate','')}
 async function saveBot(n){let b=n===1?{TOKEN:bot1Token.value,MANAGER:bot1Manager.value,API_ID:apiId.value,API_HASH:apiHash.value,TELEGRAM_PROXY:proxy.value}:{ROUTED_BOT_TOKEN:bot2Token.value,ROUTED_MANAGER:bot2Manager.value};let r=await j('/api/config',{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:JSON.stringify(b)});alert(JSON.stringify(r));[bot1Token,apiHash,bot2Token].forEach(x=>x.value='');loadConfig()}
 let routeRules=[]; async function loadRoutes(){let s=await j('/api/status'),r=s.routes||{};defaultBot.value=r.defaultBot==='secondary'?'secondary':'primary';routeRules=(r.rules||[]).map(x=>({pattern:String(x.pattern||''),bot:x.bot==='secondary'?'secondary':'primary'}));renderRoutes()} function renderRoutes(){routeList.innerHTML=routeRules.length?routeRules.map((x,i)=>`<div class=row><input data-route-pattern="${i}" value="${esc(x.pattern)}"><select data-route-bot="${i}"><option value=primary ${x.bot==='primary'?'selected':''}>Bot1</option><option value=secondary ${x.bot==='secondary'?'selected':''}>Bot2</option></select><button onclick="removeRoute(${i})">删除</button></div>`).join(''):'<div class=row>暂无路由规则</div>'} function addRoute(){let p=routePattern.value.trim();if(!p)return;routeRules.push({pattern:p.toLowerCase(),bot:routeBot.value});routePattern.value='';renderRoutes()} function removeRoute(i){routeRules.splice(i,1);renderRoutes()} async function saveRoutes(){routeRules=routeRules.map((x,i)=>({pattern:document.querySelector(`[data-route-pattern="${i}"]`)?.value.trim().toLowerCase()||x.pattern,bot:document.querySelector(`[data-route-bot="${i}"]`)?.value||x.bot})).filter(x=>x.pattern);let r=await j('/api/routes',{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:JSON.stringify({defaultBot:defaultBot.value,rules:routeRules})});alert(JSON.stringify(r));renderRoutes()}
 async function loadHistory(){let r=await j('/api/history'),a=r.data||r;historyText.innerHTML=Array.isArray(a)&&a.length?a.slice(0,50).map(x=>`<div class=row><b>${esc(x.post_title||'推送')}</b><br><span class=label>${esc(x.feed_title||'')} · ${esc(x.push_time||'')}</span><br><a href="${esc(x.post_url||'#')}" target=_blank>${esc(x.post_url||'')}</a></div>`).join(''):'<div class=row>暂无推送记录</div>'} async function loadTelegram(){let r=await j('/api/bot-users'),a=r.data||r;telegramText.innerHTML=Array.isArray(a)&&a.length?a.map(x=>`<div class=row><b>${esc(x.id||x.user_id)}</b> · ${x.state===51?'群组':'用户'}</div>`).join(''):'<div class=row>暂无用户或群组</div>'} async function addTelegram(){await j('/api/bot-users',{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:JSON.stringify({id:telegramId.value})});telegramId.value='';loadTelegram()} async function loadAdmins(){let a=await j('/api/users');adminText.innerHTML=Array.isArray(a)&&a.length?a.map(x=>`<div class=row><b>${esc(x.username)}</b> · ${esc(x.role)} · ${x.active?'启用':'停用'}</div>`).join(''):'<div class=row>暂无账号</div>'} async function addUser(){await j('/api/users',{method:'POST',headers:{'X-Admin-Confirm':'1','Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});u.value=p.value='';loadAdmins()} async function loadLogs(){logText.textContent=(await j('/api/logs')).logs||'暂无日志'} load();
@@ -171,6 +232,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/status": return self._send(200, json.dumps(self.state.snapshot(), ensure_ascii=False))
         if self.path == "/api/users": return self._send(200, json.dumps(self.users.list_public(), ensure_ascii=False))
         if self.path == "/api/config": return self._send(200, json.dumps(self.state.config_view(), ensure_ascii=False))
+        if self.path == "/api/cookie/status": return self._send(200, json.dumps(self.state.cookie_view(), ensure_ascii=False))
         if self.path == "/api/logs":
             p = subprocess.run(["docker", "logs", "--tail", "300", "360news-bot"], capture_output=True, text=True, timeout=15)
             return self._send(200, json.dumps({"logs": (p.stdout + p.stderr)[-30000:]}, ensure_ascii=False))
@@ -181,6 +243,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._guard(): return
         if self.headers.get("X-Admin-Confirm") != "1": return self._send(403, '{"error":"confirmation header required"}')
+        try:
+            if int(self.headers.get("Content-Length", "0")) > 2_000_000:
+                return self._send(413, '{"error":"request too large"}')
+        except ValueError:
+            return self._send(400, '{"error":"invalid content length"}')
         if self.path.startswith("/api/subscriptions/"):
             action = "toggle" if self.headers.get("X-Subscription-Action") == "toggle" else "delete"
             return self._send(200, json.dumps(db_query(action, self.path.rsplit("/", 1)[-1]), ensure_ascii=False))
@@ -201,18 +268,31 @@ class Handler(BaseHTTPRequestHandler):
                     else: out.append(line)
                 out.extend(f"{k}={v}" for k,v in values.items() if k not in seen); env_path.write_text("\n".join(out)+"\n", encoding="utf-8"); return self._send(200, '{"ok":true,"restartRequired":true}')
             except (ValueError, OSError, TypeError): return self._send(400, '{"error":"invalid Bot configuration"}')
-        if self.path == "/api/cookie":
+        if self.path in ("/api/cookie", "/api/cookie/validate"):
             raw = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8", "replace").strip()
-            try:
-                parsed = json.loads(raw); cookies = parsed if isinstance(parsed, list) else parsed.get("cookies", [])
-            except ValueError:
-                cookies = []
-                for line in raw.splitlines():
-                    if line and not line.startswith("#"):
-                        fields = line.split("\t")
-                        if len(fields) >= 7: cookies.append({"domain": fields[0], "path": fields[2], "secure": fields[3].upper()=="TRUE", "expires": int(fields[4] or -1), "name": fields[5], "value": fields[6]})
-            if not cookies: return self._send(400, '{"error":"Cookie 格式无法识别"}')
-            target = Path("/data/config/x_session.json"); target.write_text(json.dumps({"cookies": cookies, "origins": []}, ensure_ascii=False, indent=2), encoding="utf-8"); return self._send(200, json.dumps({"ok": True, "cookieCount": len(cookies)}))
+            if not raw and self.path == "/api/cookie/validate":
+                try:
+                    raw = (Path("/data/config/x_session.json")).read_text(encoding="utf-8")
+                except OSError:
+                    raw = ""
+            cookies, parse_errors = parse_cookie_input(raw) if raw else ([], [])
+            names = {c["name"] for c in cookies}
+            result = {"ok": bool(cookies) and {"auth_token", "ct0"}.issubset(names), "cookieCount": len(cookies),
+                      "hasAuthToken": "auth_token" in names, "hasCt0": "ct0" in names, "errors": parse_errors}
+            if self.path == "/api/cookie/validate":
+                try:
+                    bridge_url = os.environ.get("RSSTT_BRIDGE_URL", "http://bridge:1200").rstrip("/")
+                    with urllib.request.urlopen(f"{bridge_url}/session", timeout=8) as response:
+                        result["bridge"] = json.loads(response.read().decode("utf-8"))
+                except Exception as exc:
+                    result["bridge"] = {"reachable": False, "error": str(exc)}
+                return self._send(200, json.dumps(result, ensure_ascii=False))
+            if not result["ok"]:
+                return self._send(400, json.dumps({**result, "error": "缺少 auth_token 或 ct0"}, ensure_ascii=False))
+            target = Path("/data/config/x_session.json")
+            target.write_text(json.dumps({"cookies": cookies, "origins": []}, ensure_ascii=False, indent=2), encoding="utf-8")
+            restarted = subprocess.run(["docker", "restart", "360news-bridge"], capture_output=True, text=True, timeout=30).returncode == 0
+            return self._send(200, json.dumps({**result, "saved": True, "bridgeRestarted": restarted}, ensure_ascii=False))
         if self.path == "/api/subscriptions":
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))

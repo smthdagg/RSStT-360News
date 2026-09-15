@@ -6,6 +6,7 @@ RSStT DB 查询桥 — Electron 通过子进程调用此脚本操作 SQLite
 import sys
 import json
 import sqlite3
+import os
 from pathlib import Path
 
 RSSTT_ROOT = Path(__file__).resolve().parent.parent
@@ -82,6 +83,9 @@ def action_add(url, title, category, manager_id):
     if not url or not manager_id:
         db.close()
         return {'ok': False, 'error': 'URL 和 MANAGER 必填'}
+    bridge_url = os.environ.get('RSSTT_BRIDGE_URL', '').rstrip('/')
+    if bridge_url and url.startswith('http://127.0.0.1:1200/'):
+        url = bridge_url + url[len('http://127.0.0.1:1200'):]
     # 查找或创建 feed
     feed = db.execute('SELECT id FROM feed WHERE link = ?', (url,)).fetchone()
     if feed:

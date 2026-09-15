@@ -8,15 +8,22 @@ services:
     tmpfs: [/tmp]
     volumes: ["../config:/app/config"]
     env_file: [.env]
+    environment:
+      RSSTT_BRIDGE_URL: http://bridge:1200
     depends_on: [bridge]
   bridge:
     container_name: 360news-bridge
     build: { context: .., dockerfile: deploy/Dockerfile.bridge }
     command: ["sh", "-c", "Xvfb :99 -screen 0 1280x900x24 >/tmp/xvfb.log 2>&1 & export DISPLAY=:99; exec python -u src/twitter_rss_bridge.py"]
+    environment:
+      XBRIDGE_BIND: 0.0.0.0
     restart: unless-stopped
     init: true
     shm_size: 1gb
-    volumes: ["../config:/app/config"]
+    volumes:
+      - ../config:/app/config
+      - ../src/twitter_rss_bridge.py:/app/src/twitter_rss_bridge.py:ro
+      - ../src/x_browser_fetcher.py:/app/src/x_browser_fetcher.py:ro
     expose: ["1200"]
   admin:
     container_name: 360news-admin
@@ -29,6 +36,7 @@ services:
       ADMIN_PORT: 8787
       RSSTT_DIR: /app
       RSSTT_CONFIG_DIR: /data/config
+      RSSTT_BRIDGE_URL: http://bridge:1200
       ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH}
     volumes:
