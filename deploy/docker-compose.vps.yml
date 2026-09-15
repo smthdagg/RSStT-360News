@@ -6,7 +6,7 @@ services:
     init: true
     read_only: true
     tmpfs: [/tmp]
-    volumes: ["360news-config:/app/config"]
+    volumes: ["../config:/app/config"]
     env_file: [.env]
     depends_on: [bridge]
   bridge:
@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
     init: true
     shm_size: 1gb
-    volumes: ["360news-config:/app/config"]
+    volumes: ["../config:/app/config"]
     expose: ["1200"]
   admin:
     container_name: 360news-admin
@@ -31,8 +31,6 @@ services:
       ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH}
     volumes:
-      - 360news-config:/data/config
+      - ../config:/data/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
     working_dir: /app
-volumes:
-  360news-config:
