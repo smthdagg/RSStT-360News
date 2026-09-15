@@ -6,7 +6,9 @@ services:
     init: true
     read_only: true
     tmpfs: [/tmp]
-    volumes: ["../config:/app/config"]
+    volumes:
+      - "../config:/app/config"
+      - "../src/parsing/post_formatter.py:/app/src/parsing/post_formatter.py:ro"
     env_file: [.env]
     environment:
       RSSTT_BRIDGE_URL: http://bridge:1200
