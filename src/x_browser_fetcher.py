@@ -294,6 +294,7 @@ class XBrowserFetcher:
     def _import_session_if_changed(self) -> None:
         if not self.session_file.exists():
             return
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256(self.session_file.read_bytes()).hexdigest()
         marker = self.profile_dir / "session_import.sha256"
         if marker.exists() and marker.read_text().strip() == digest:
