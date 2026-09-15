@@ -12,4 +12,4 @@ cp .env.example .env
 docker compose -f docker-compose.vps.yml up -d --build
 ```
 
-Open `http://so.oaclub.com:8787/` after setting a strong PBKDF2 password. The backend requires Basic Auth and an `X-Admin-Confirm: 1` header for mutations; user management is available to the admin role. Make sure the DNS A record for `so.oaclub.com` points to the Tencent VPS, restrict 8787 in Tencent Security Group/UFW, and put it behind HTTPS before exposing it broadly. Do not publish the bridge port. Stop the local Bot before starting the VPS Bot to avoid duplicate Telegram sessions.
+Open `http://YOUR_VPS_IP:8787/` after setting a strong PBKDF2 password. The backend requires Basic Auth and an `X-Admin-Confirm: 1` header for mutations; user management is available to the admin role. Restrict 8787 to your IP in Tencent Security Group/UFW. Do not publish the bridge port. Stop the local Bot before starting the VPS Bot to avoid duplicate Telegram sessions.
