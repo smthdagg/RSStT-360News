@@ -18,6 +18,93 @@ from typing import Any, Iterable
 
 ALLOWED_COOKIE_DOMAINS = {"x.com", "twitter.com"}
 TIMELINE_OPERATIONS = ("UserTweets", "UserTweetsAndReplies")
+CAPTURE_VERSION = "v16"
+
+_COOKIE_CONSENT_RE = re.compile(
+    r"(?:cookie|cookies|隐私|个人数据|个性化|privacy|personal data)", re.IGNORECASE
+)
+_COOKIE_REJECT_RE = re.compile(
+    r"(?:拒绝|拒收|不要|decline|reject|necessary only|仅必要)", re.IGNORECASE
+)
+_COOKIE_CLOSE_RE = re.compile(r"(?:关闭|close|not now|稍后)", re.IGNORECASE)
+_COOKIE_ACCEPT_RE = re.compile(r"(?:接受|同意|允许|accept|agree|allow)", re.IGNORECASE)
+
+
+def _cookie_action_priority(label: str) -> int:
+    """Rank consent actions, preferring the least permissive choice."""
+    normalized = re.sub(r"\s+", " ", str(label or "")).strip()
+    if not normalized:
+        return 0
+    if _COOKIE_REJECT_RE.search(normalized):
+        return 3
+    if _COOKIE_CLOSE_RE.search(normalized):
+        return 2
+    if _COOKIE_ACCEPT_RE.search(normalized):
+        return 1
+    return 0
+
+
+def _dismiss_cookie_consent(page: Any) -> bool:
+    """Dismiss X's consent banner before it can cover a tweet screenshot."""
+    try:
+        return bool(page.evaluate(
+            """() => {
+                const consent = /(?:cookie|cookies|隐私|个人数据|个性化|privacy|personal data)/i;
+                const reject = /(?:拒绝|拒收|不要|decline|reject|necessary only|仅必要)/i;
+                const close = /(?:关闭|close|not now|稍后)/i;
+                const accept = /(?:接受|同意|允许|accept|agree|allow)/i;
+                const containers = [...document.querySelectorAll(
+                    '[role="dialog"], [aria-modal="true"], [data-testid*="cookie" i], div, section, aside'
+                )].filter((el) => {
+                    if (!consent.test(el.innerText || '')) return false;
+                    if (el.matches('[role="dialog"], [aria-modal="true"], [data-testid*="cookie" i]')) return true;
+                    const style = getComputedStyle(el);
+                    return ['fixed', 'sticky', 'absolute'].includes(style.position)
+                        && el.querySelector('button,[role="button"]');
+                })
+                  .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length);
+                let changed = false;
+                for (const container of containers.slice(0, 6)) {
+                    const buttons = [...container.querySelectorAll('button,[role="button"]')];
+                    const score = (button) => {
+                        const label = (button.innerText || button.getAttribute('aria-label') || '').trim();
+                        if (reject.test(label)) return 3;
+                        if (close.test(label)) return 2;
+                        if (accept.test(label)) return 1;
+                        return 0;
+                    };
+                    buttons.sort((a, b) => score(b) - score(a));
+                    const target = buttons.find((button) => score(button) > 0);
+                    if (target) {
+                        target.click();
+                        changed = true;
+                    }
+                    container.style.setProperty('display', 'none', 'important');
+                    changed = true;
+                }
+                return changed;
+            }"""
+        ))
+    except Exception:
+        pass
+
+    # Keep a locator-based fallback for browser builds where evaluate() is blocked.
+    try:
+        best = None
+        for dialog in page.locator('[role="dialog"], [aria-modal="true"]').all():
+            if not _COOKIE_CONSENT_RE.search(dialog.inner_text() or ''):
+                continue
+            for button in dialog.locator('button, [role="button"]').all():
+                label = button.get_attribute('aria-label') or button.inner_text()
+                priority = _cookie_action_priority(label)
+                if priority and (best is None or priority > best[0]):
+                    best = priority, button
+        if best:
+            best[1].click(timeout=2_000)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 class XBrowserError(RuntimeError):
@@ -529,8 +616,11 @@ class XBrowserFetcher:
                 wait_until="domcontentloaded",
                 timeout=self.timeout_seconds * 1_000,
             )
+            page.wait_for_timeout(750)
+            _dismiss_cookie_consent(page)
             article = page.locator("article").first
             article.wait_for(state="visible", timeout=self.timeout_seconds * 1_000)
+            _dismiss_cookie_consent(page)
             # Keep the complete outer tweet, including quote/reply cards. Remove
             # fixed page chrome and height clamps that otherwise crop long posts.
             page.add_style_tag(content="""
@@ -570,28 +660,75 @@ class XBrowserFetcher:
 
             # X streams quoted tweets and media after the outer article is visible.
             # Expand collapsed text before waiting for the final layout.
-            for button in article.locator("button").all():
-                try:
-                    if button.inner_text().strip().lower() in {"显示更多", "show more"}:
-                        button.click(timeout=1_000)
-                except Exception:
-                    continue
+            for _ in range(3):
+                expanded = False
+                for button in article.locator("button").all():
+                    try:
+                        if button.inner_text().strip().lower() in {
+                            "显示更多", "show more", "展开", "read more"
+                        }:
+                            button.click(timeout=1_000)
+                            expanded = True
+                    except Exception:
+                        continue
+                if not expanded:
+                    break
+                page.wait_for_timeout(400)
+
+            # Scroll through the article once so X lazy-loads quoted posts and media
+            # that are below the initial viewport before element.screenshot().
+            page.evaluate("""async () => {
+                const article = document.querySelector('article');
+                if (!article) return;
+                const original = window.scrollY;
+                const top = Math.max(0, article.getBoundingClientRect().top + original - 80);
+                let bottom = top + article.getBoundingClientRect().height;
+                for (let y = top; y < bottom; y += Math.max(320, window.innerHeight * 0.8)) {
+                    window.scrollTo(0, y);
+                    await new Promise((resolve) => setTimeout(resolve, 180));
+                    bottom = Math.max(bottom, top + article.getBoundingClientRect().height);
+                }
+                window.scrollTo(0, original);
+            }""")
+            _dismiss_cookie_consent(page)
             try:
                 page.wait_for_function(
-                    """article => [...article.querySelectorAll('img')]
-                    .filter(img => img.src.includes('pbs.twimg.com'))
-                    .every(img => img.complete && img.naturalWidth > 0)""",
-                    article,
-                    timeout=8_000,
+                    """() => {
+                        const article = document.querySelector('article');
+                        if (!article) return false;
+                        const images_ready = [...article.querySelectorAll('img')].every(img => img.complete);
+                        const videos_ready = [...article.querySelectorAll('video')].every(video =>
+                            video.readyState > 0 || video.error || Boolean(video.poster));
+                        const fonts_ready = !document.fonts || document.fonts.status === 'loaded';
+                        return images_ready && videos_ready && fonts_ready;
+                    }""",
+                    timeout=min(self.timeout_seconds * 1_000, 15_000),
                 )
             except Exception:
-                # Some tweets have no media, and X can keep background requests open.
+                # A broken X video should not prevent the rest of the tweet from being captured.
                 pass
-            page.wait_for_timeout(2_000)
+            page.evaluate("""() => {
+                const article = document.querySelector('article');
+                if (!article) return;
+                for (const video of article.querySelectorAll('video')) {
+                    const poster = video.getAttribute('poster') || video.poster;
+                    if (!poster || (!video.error && video.readyState > 0)) continue;
+                    const image = document.createElement('img');
+                    image.src = poster;
+                    image.alt = '';
+                    image.className = video.className;
+                    image.style.cssText = video.style.cssText;
+                    image.style.display = 'block';
+                    image.style.maxWidth = '100%';
+                    video.replaceWith(image);
+                }
+            }""")
+            _dismiss_cookie_consent(page)
+            page.wait_for_timeout(1_500)
             # Use device pixels so macOS/Retina captures retain the same sharp
             # typography and roughly 2x resolution as the reference screenshot.
             article.screenshot(path=str(image_path), scale="device")
-            version_marker.write_text("v15", encoding="utf-8")
+            version_marker.write_text(CAPTURE_VERSION, encoding="utf-8")
             return image_path
         finally:
             page.close()
