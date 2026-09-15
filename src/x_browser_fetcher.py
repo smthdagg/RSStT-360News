@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 ALLOWED_COOKIE_DOMAINS = {"x.com", "twitter.com"}
 TIMELINE_OPERATIONS = ("UserTweets", "UserTweetsAndReplies")
-CAPTURE_VERSION = "v17"
+CAPTURE_VERSION = "v18"
 
 _COOKIE_CONSENT_RE = re.compile(
     r"(?:cookie|cookies|隐私|个人数据|个性化|privacy|personal data)", re.IGNORECASE
@@ -691,68 +691,41 @@ class XBrowserFetcher:
                 window.scrollTo(0, original);
             }""")
             _dismiss_cookie_consent(page)
+            # Give failed media one explicit retry. If X still reports a
+            # failure, keep that panel in the screenshot so the tweet remains
+            # complete instead of silently deleting part of its content.
+            page.evaluate("""() => {
+                const retry = /^(重新载入|重试|reload|try again)$/i;
+                for (const el of document.querySelectorAll('button,[role="button"],a')) {
+                    const label = (el.innerText || el.getAttribute('aria-label') || '').trim();
+                    if (retry.test(label)) el.click();
+                }
+            }""")
             try:
                 page.wait_for_function(
                     """() => {
                         const article = document.querySelector('article');
                         if (!article) return false;
-                        const images_ready = [...article.querySelectorAll('img')].every(img => img.complete);
+                        const images_ready = [...article.querySelectorAll('img')]
+                            .filter(img => img.src && !img.src.startsWith('data:'))
+                            .every(img => img.complete && (img.naturalWidth > 0
+                                || !img.src.includes('pbs.twimg.com')));
                         const videos_ready = [...article.querySelectorAll('video')].every(video =>
-                            video.readyState > 0 || video.error || Boolean(video.poster));
+                            video.readyState >= 2 || Boolean(video.error));
+                        const media_failed = [...article.querySelectorAll('*')].some(el => {
+                            const text = (el.innerText || '').trim();
+                            return text.length > 0 && text.length < 80
+                                && /无法播放该媒体|media could not be played/i.test(text);
+                        });
                         const fonts_ready = !document.fonts || document.fonts.status === 'loaded';
-                        return images_ready && videos_ready && fonts_ready;
+                        return images_ready && (videos_ready || media_failed) && fonts_ready;
                     }""",
-                    timeout=min(self.timeout_seconds * 1_000, 15_000),
+                    timeout=min(self.timeout_seconds * 1_000, 30_000),
                 )
             except Exception:
-                # A broken X video should not prevent the rest of the tweet from being captured.
+                # A slow or broken media must still be captured with the full
+                # article; the visible X error panel is useful diagnostic data.
                 pass
-            page.evaluate("""() => {
-                const article = document.querySelector('article');
-                if (!article) return;
-
-                // A PNG cannot contain a playable video. Use X's poster frame so
-                // the screenshot never includes a spinner or player controls.
-                for (const video of [...article.querySelectorAll('video')]) {
-                    const poster = video.getAttribute('poster') || video.poster;
-                    if (!poster) continue;
-                    const image = document.createElement('img');
-                    image.src = poster;
-                    image.alt = '';
-                    image.className = video.className;
-                    image.style.cssText = video.style.cssText;
-                    image.style.display = 'block';
-                    image.style.maxWidth = '100%';
-                    image.style.objectFit = 'cover';
-                    video.replaceWith(image);
-                }
-
-                // Some videos have no poster and X renders an error panel. Hide
-                // only that media block; never let the error text enter the post.
-                const errorText = /无法播放该媒体|media could not be played|重新载入|reload/i;
-                const articleRect = article.getBoundingClientRect();
-                const nodes = [...article.querySelectorAll('*')]
-                    .filter((el) => {
-                        const text = (el.innerText || '').trim();
-                        const rect = el.getBoundingClientRect();
-                        return text && text.length < 80 && errorText.test(text)
-                            && rect.width > 0 && rect.height > 0;
-                    })
-                    .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length);
-                for (const node of nodes) {
-                    let block = node;
-                    for (let i = 0; i < 10 && block.parentElement; i += 1) {
-                        const rect = block.getBoundingClientRect();
-                        if (rect.width >= 240 && rect.height >= 120) break;
-                        block = block.parentElement;
-                    }
-                    const rect = block.getBoundingClientRect();
-                    if (block !== article && rect.width >= 240 && rect.height >= 120
-                        && rect.height < articleRect.height * 0.9) {
-                        block.style.setProperty('display', 'none', 'important');
-                    }
-                }
-            }""")
             _dismiss_cookie_consent(page)
             page.wait_for_timeout(1_500)
             # Use device pixels so macOS/Retina captures retain the same sharp
