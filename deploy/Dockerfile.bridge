@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src ./src
 COPY scripts ./scripts
 COPY telegramRSSbot.py .
-CMD ["xvfb-run", "-a", "python", "-u", "src/twitter_rss_bridge.py"]
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x900x24 >/tmp/xvfb.log 2>&1 & export DISPLAY=:99; exec python -u src/twitter_rss_bridge.py"]
