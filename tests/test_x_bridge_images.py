@@ -1,8 +1,15 @@
 import unittest
 from datetime import datetime, timezone
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from PIL import Image as PILImage
+
 from src.twitter_rss_bridge import configured_x_usernames, generate_rss
+from src.parsing.medium import UploadedImage
+from src.parsing.post_formatter import PostFormatter
 
 
 class XBridgeImageTests(unittest.TestCase):
@@ -34,6 +41,20 @@ class XBridgeImageTests(unittest.TestCase):
         }])
         self.assertIn("tweet-image/126.png?v=15", rss)
         self.assertNotIn("original.jpg", rss)
+
+    def test_local_screenshot_is_uploaded_from_shared_file(self):
+        payload = BytesIO()
+        PILImage.new("RGB", (4, 4), "white").save(payload, format="PNG")
+        with TemporaryDirectory() as tmp:
+            image_path = Path(tmp) / "tweet_screenshots" / "123.png"
+            image_path.parent.mkdir()
+            image_path.write_bytes(payload.getvalue())
+            with patch("src.parsing.medium.env.config_folder_path", tmp):
+                medium = PostFormatter(html="", feed_link="http://127.0.0.1:1200/twitter/user/daydayuplift") \
+                    ._make_local_image("http://127.0.0.1:1200/tweet-image/123.png?v=15")
+
+        self.assertIsInstance(medium, UploadedImage)
+        self.assertEqual(medium.file, payload.getvalue())
 
     def test_rss_keeps_only_main_tweet_text(self):
         rss = generate_rss("daydayuplift", [{
