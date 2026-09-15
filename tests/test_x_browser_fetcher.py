@@ -372,6 +372,18 @@ class BrowserFetcherTests(unittest.TestCase):
             self.assertEqual(count, 1)
             self.assertEqual(saved["cookies"][0]["name"], "auth_token")
 
+    def test_recaptures_images_with_stale_capture_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_dir = Path(directory) / "screenshots"
+            image_dir.mkdir()
+            (image_dir / "123.png").write_bytes(b"stale")
+            (image_dir / "123.png.capture-v15").write_text("v15")
+            fetcher, _ = self.make_fetcher(directory)
+
+            with patch.object(fetcher, "start", side_effect=RuntimeError("recapture")):
+                with self.assertRaisesRegex(RuntimeError, "recapture"):
+                    fetcher.capture_tweet_screenshot("123", image_dir)
+
 
 if __name__ == "__main__":
     unittest.main()
