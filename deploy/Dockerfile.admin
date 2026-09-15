@@ -1,0 +1,4 @@
+FROM python:3.13-slim
+WORKDIR /app
+COPY deploy/admin_server.py .
+CMD ["python", "-u", "admin_server.py"]

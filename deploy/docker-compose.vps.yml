@@ -1,0 +1,38 @@
+services:
+  bot:
+    container_name: 360news-bot
+    build: { context: .., dockerfile: Dockerfile }
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    volumes: ["360news-config:/app/config"]
+    env_file: [.env]
+    depends_on: [bridge]
+  bridge:
+    container_name: 360news-bridge
+    build: { context: .., dockerfile: deploy/Dockerfile.bridge }
+    restart: unless-stopped
+    init: true
+    shm_size: 1gb
+    volumes: ["360news-config:/app/config"]
+    expose: ["1200"]
+  admin:
+    container_name: 360news-admin
+    build: { context: .., dockerfile: deploy/Dockerfile.admin }
+    restart: unless-stopped
+    init: true
+    ports: ["127.0.0.1:8787:8787"]
+    environment:
+      ADMIN_BIND: 0.0.0.0
+      ADMIN_PORT: 8787
+      RSSTT_DIR: /app
+      RSSTT_CONFIG_DIR: /data/config
+      ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH}
+    volumes:
+      - 360news-config:/data/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    working_dir: /app
+volumes:
+  360news-config:
