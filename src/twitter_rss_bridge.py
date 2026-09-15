@@ -42,6 +42,7 @@ from src.x_browser_fetcher import (
     XBrowserError,
     XBrowserFetcher,
     XRateLimitedError,
+    CAPTURE_VERSION,
     should_refresh_cache_entry,
 )
 
@@ -228,7 +229,7 @@ class XAPIWorker:
                 try:
                     self.fetcher.capture_tweet_screenshot(tweet['id'], TWEET_IMAGE_DIR)
                     tweet['screenshot_url'] = (
-                        f"http://127.0.0.1:{PORT}/tweet-image/{tweet['id']}.png?v=15"
+                        f"http://127.0.0.1:{PORT}/tweet-image/{tweet['id']}.png?v={CAPTURE_VERSION}"
                     )
                     tweet['screenshot_time'] = datetime.now(timezone.utc)
                 except Exception as exc:

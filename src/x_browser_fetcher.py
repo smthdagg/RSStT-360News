@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 ALLOWED_COOKIE_DOMAINS = {"x.com", "twitter.com"}
 TIMELINE_OPERATIONS = ("UserTweets", "UserTweetsAndReplies")
-CAPTURE_VERSION = "v16"
+CAPTURE_VERSION = "v17"
 
 _COOKIE_CONSENT_RE = re.compile(
     r"(?:cookie|cookies|隐私|个人数据|个性化|privacy|personal data)", re.IGNORECASE
@@ -710,9 +710,12 @@ class XBrowserFetcher:
             page.evaluate("""() => {
                 const article = document.querySelector('article');
                 if (!article) return;
-                for (const video of article.querySelectorAll('video')) {
+
+                // A PNG cannot contain a playable video. Use X's poster frame so
+                // the screenshot never includes a spinner or player controls.
+                for (const video of [...article.querySelectorAll('video')]) {
                     const poster = video.getAttribute('poster') || video.poster;
-                    if (!poster || (!video.error && video.readyState > 0)) continue;
+                    if (!poster) continue;
                     const image = document.createElement('img');
                     image.src = poster;
                     image.alt = '';
@@ -720,7 +723,34 @@ class XBrowserFetcher:
                     image.style.cssText = video.style.cssText;
                     image.style.display = 'block';
                     image.style.maxWidth = '100%';
+                    image.style.objectFit = 'cover';
                     video.replaceWith(image);
+                }
+
+                // Some videos have no poster and X renders an error panel. Hide
+                // only that media block; never let the error text enter the post.
+                const errorText = /无法播放该媒体|media could not be played|重新载入|reload/i;
+                const articleRect = article.getBoundingClientRect();
+                const nodes = [...article.querySelectorAll('*')]
+                    .filter((el) => {
+                        const text = (el.innerText || '').trim();
+                        const rect = el.getBoundingClientRect();
+                        return text && text.length < 80 && errorText.test(text)
+                            && rect.width > 0 && rect.height > 0;
+                    })
+                    .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length);
+                for (const node of nodes) {
+                    let block = node;
+                    for (let i = 0; i < 10 && block.parentElement; i += 1) {
+                        const rect = block.getBoundingClientRect();
+                        if (rect.width >= 240 && rect.height >= 120) break;
+                        block = block.parentElement;
+                    }
+                    const rect = block.getBoundingClientRect();
+                    if (block !== article && rect.width >= 240 && rect.height >= 120
+                        && rect.height < articleRect.height * 0.9) {
+                        block.style.setProperty('display', 'none', 'important');
+                    }
                 }
             }""")
             _dismiss_cookie_consent(page)
