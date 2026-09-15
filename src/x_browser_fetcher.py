@@ -599,7 +599,7 @@ class XBrowserFetcher:
             raise ValueError(f"Invalid tweet id: {tweet_id!r}")
         image_dir.mkdir(parents=True, exist_ok=True)
         image_path = image_dir / f"{tweet_id}.png"
-        version_marker = image_dir / f"{tweet_id}.png.capture-v15"
+        version_marker = image_dir / f"{tweet_id}.png.capture-{CAPTURE_VERSION}"
         if image_path.exists() and version_marker.exists():
             return image_path
         self.start()
