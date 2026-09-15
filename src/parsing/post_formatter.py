@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Union, Optional
 from typing_extensions import Final
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo  # ZCode: 北京时间
 from html import escape as html_escape
 
@@ -55,7 +56,10 @@ from . import utils, tgraph
 from .splitter import get_plain_text_length
 from .html_parser import parse
 from .html_node import *
-from .medium import Media, AbstractMedium, Image, Video, Audio, File, Animation
+from .medium import (
+    Media, AbstractMedium, Image, Video, Audio, File, Animation, UploadedImage,
+    _local_tweet_screenshot,
+)
 from ..web.media import construct_weserv_url_convert_to_2560
 
 AUTO: Final = 0
@@ -667,17 +671,23 @@ class PostFormatter:
 
     def _make_local_image(self, url: str):
         """下载本地截图 (127.0.0.1) 并返回 UploadedImage"""
+        local_path = _local_tweet_screenshot(url)
+        if local_path != url:
+            try:
+                data = Path(local_path).read_bytes()
+                logger.debug(f'Local screenshot read: {local_path} ({len(data)} bytes)')
+                return UploadedImage(data, Path(local_path).name)
+            except OSError as e:
+                logger.warning(f'Failed to read local screenshot {local_path}: {e}')
         try:
             import urllib.request
             resp = urllib.request.urlopen(url, timeout=10)
             if resp.status == 200:
                 data = resp.read()
-                from .medium import UploadedImage
                 logger.debug(f'Local screenshot downloaded: {url} ({len(data)} bytes)')
                 return UploadedImage(data, 'screenshot.png')
         except Exception as e:
             logger.warning(f'Failed to download local screenshot {url}: {e}')
-            from .medium import Image
         return Image(url)
 
     async def telegraph_ify(self):
