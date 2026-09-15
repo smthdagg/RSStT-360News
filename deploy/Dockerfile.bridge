@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth font
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN camoufox fetch
 COPY src ./src
 COPY scripts ./scripts
 COPY telegramRSSbot.py .

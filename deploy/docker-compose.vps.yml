@@ -12,6 +12,7 @@ services:
   bridge:
     container_name: 360news-bridge
     build: { context: .., dockerfile: deploy/Dockerfile.bridge }
+    command: ["sh", "-c", "Xvfb :99 -screen 0 1280x900x24 >/tmp/xvfb.log 2>&1 & export DISPLAY=:99; exec python -u src/twitter_rss_bridge.py"]
     restart: unless-stopped
     init: true
     shm_size: 1gb

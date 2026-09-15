@@ -156,8 +156,8 @@ COPY --from=mimalloc-builder /mimalloc/build/lib /usr/local/lib
 COPY --from=dep-builder /opt/venv /opt/venv
 COPY --from=app-builder /app-minimal /app
 
-# The checked-in Simplified Chinese catalog is GB18030; Python JSON loading is UTF-8.
-RUN iconv -f gb18030 -t utf-8 -c /app/src/i18n/zh-Hans.json > /tmp/zh-Hans.json && mv /tmp/zh-Hans.json /app/src/i18n/zh-Hans.json
+# Keep valid UTF-8 and replace the few legacy bytes in the mixed catalog.
+RUN python -c 'from pathlib import Path; p=Path("/app/src/i18n/zh-Hans.json"); p.write_text(p.read_bytes().decode("utf-8", "replace"), encoding="utf-8")'
 
 # verify cryptg installation
 RUN python -c 'import logging; logging.basicConfig(level=logging.DEBUG); import telethon; import cryptg'

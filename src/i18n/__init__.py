@@ -24,7 +24,8 @@ from cjkwrap import cjklen
 from telethon.tl import types
 
 I18N_PATH = path.split(path.realpath(__file__))[0]
-ALL_LANGUAGES = tuple(sorted(lang[:-5] for lang in listdir(I18N_PATH) if lang.endswith('.json')))
+ALL_LANGUAGES = tuple(sorted(lang[:-5] for lang in listdir(I18N_PATH)
+                             if lang.endswith('.json') and not lang.startswith('._')))
 FALLBACK_LANGUAGE = istr('en')
 NO_FALLBACK_KEYS = {istr('iso_639_code')}
 
@@ -137,7 +138,8 @@ class _L10N:
     def __init__(self, lang_code: str):
         self.__lang_code: str = lang_code
         self.__l10n_lang: CIMultiDict[str]
-        with open(path.join(I18N_PATH, f'{lang_code}.json'), encoding='utf-8') as f:
+        # Catalogs may contain legacy bytes; keep the bot usable instead of crashing at startup.
+        with open(path.join(I18N_PATH, f'{lang_code}.json'), encoding='utf-8', errors='replace') as f:
             l10n_d = load(f)
         l10n_d_flatten = {}
         assert isinstance(l10n_d, dict)
