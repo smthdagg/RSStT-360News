@@ -157,7 +157,7 @@ COPY --from=dep-builder /opt/venv /opt/venv
 COPY --from=app-builder /app-minimal /app
 
 # The checked-in Simplified Chinese catalog is GB18030; Python JSON loading is UTF-8.
-RUN iconv -f gb18030 -t utf-8 /app/src/i18n/zh-Hans.json > /tmp/zh-Hans.json && mv /tmp/zh-Hans.json /app/src/i18n/zh-Hans.json
+RUN iconv -f gb18030 -t utf-8 -c /app/src/i18n/zh-Hans.json > /tmp/zh-Hans.json && mv /tmp/zh-Hans.json /app/src/i18n/zh-Hans.json
 
 # verify cryptg installation
 RUN python -c 'import logging; logging.basicConfig(level=logging.DEBUG); import telethon; import cryptg'
