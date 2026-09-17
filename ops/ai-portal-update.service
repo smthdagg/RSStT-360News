@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh OpenAIClub public information index
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+# Replace /srv/openai-club with the deployment directory on the target host.
+ReadWritePaths=/srv/openai-club/data
+ExecStart=/usr/local/libexec/ai-portal-update /srv/openai-club/data/news.json
+TimeoutStartSec=90

@@ -1,5 +1,12 @@
 .env
 config/.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+*.session
 config/db.sqlite3
 config/*.json
 !config/xbridge_config.json
@@ -11,4 +18,3 @@ config/tweet_screenshots/
 config/db.sqlite3-wal
 config/db.sqlite3-shm
 config/push_history.db
-

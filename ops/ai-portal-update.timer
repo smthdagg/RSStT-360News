@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenAIClub refresh every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=ai-portal-update.service
+
+[Install]
+WantedBy=timers.target

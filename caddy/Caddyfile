@@ -1,0 +1,46 @@
+# Public dashboard example for a VPS where host port 443 is already occupied.
+# Copy this into the Caddy service config directory and replace the hostname.
+# Map host ports 80 and 8443 to Caddy container ports 80 and 443.
+
+http://video.example.com {
+    # Keep the existing application reachable through the encrypted entrypoint.
+    handle {
+        redir https://video.example.com:8443{uri} permanent
+    }
+}
+
+# The public OpenAIClub homepage lives on the www hostname.
+http://www.example.com {
+    handle_path /downloads* {
+        root * /srv/software
+        file_server
+    }
+
+    handle {
+        root * /srv/software
+        file_server
+    }
+}
+
+# Keep the private cookie-file service used by the app container.
+http://configuration-webserver {
+    root * /srv
+    file_server browse
+}
+
+https://www.example.com {
+    handle_path /downloads* {
+        root * /srv/software
+        file_server
+    }
+
+    handle {
+        root * /srv/software
+        file_server
+    }
+}
+
+https://video.example.com {
+    # VideoDownload Plus backend only.
+    reverse_proxy app:5555
+}

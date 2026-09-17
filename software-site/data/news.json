@@ -1,0 +1,248 @@
+{
+  "updated_at": "2026-09-14T20:53:07Z",
+  "items": [
+    {
+      "category": "markets",
+      "title": "Warsh's credibility is on the line this week as Trump policies put pressure on Fed to hike",
+      "summary": "With inflation above target and no visibility on lower oil prices or stability of tariffs, the Fed chairman needs to pass the test that has faced his predecessors",
+      "link": "https://www.cnbc.com/2026/09/14/warshs-credibility-is-on-the-line-this-week-as-trump-policies-put-pressure-on-fed-to-hike.html",
+      "source": "CNBC Finance",
+      "published": "2026-09-14T20:49:03Z"
+    },
+    {
+      "category": "markets",
+      "title": "Bank of America expects third-quarter investment banking fees to fall more than 10%; shares slide",
+      "summary": "The muted outlook from the country's second-largest bank by assets could be an early signal that Wall Street's AI boom might have hit turbulence.",
+      "link": "https://www.cnbc.com/2026/09/14/bank-of-america-bac-q3-investment-banking-fees.html",
+      "source": "CNBC Finance",
+      "published": "2026-09-14T20:34:23Z"
+    },
+    {
+      "category": "ai",
+      "title": "Watch astronaut Christina Koch and Google’s James Manyika discuss space, technology, and discovery.",
+      "summary": "Christina Koch sits down with James Manyika, Google’s Senior Vice President of Research, Labs, Technology & Society.",
+      "link": "https://blog.google/innovation-and-ai/technology/ai/dialogues-christina-koch/",
+      "source": "Google AI",
+      "published": "2026-09-14T19:00:00Z"
+    },
+    {
+      "category": "markets",
+      "title": "SEC Grants Exemptive Relief from Certain Inline XBRL Filing or Submission Requirements",
+      "summary": "The Securities and Exchange Commission issued an order granting exemptive relief from certain Inline XBRL requirements adopted on Dec. 16, 2024. More specifically, the Commission is granting exemptive relief from filing or submitting the fo…",
+      "link": "https://www.sec.gov/newsroom/press-releases/2026-88-sec-grants-exemptive-relief-certain-inline-xbrl-filing-or-submission-requirements",
+      "source": "SEC Press Releases",
+      "published": "2026-09-14T16:47:00Z"
+    },
+    {
+      "category": "ai",
+      "title": "DevFest is back",
+      "summary": "Animation of the text \"{DevFest} 2026 Join us! Google Developer Groups\" with a globe icon, asterisk icon, icon",
+      "link": "https://blog.google/innovation-and-ai/technology/developers-tools/devfest2026/",
+      "source": "Google AI",
+      "published": "2026-09-14T16:00:00Z"
+    },
+    {
+      "category": "markets",
+      "title": "Prediction market traders think gas prices will hit new highs for the year",
+      "summary": "Oil prices have marched higher in recent weeks, above $100 per barrel, as tensions between the U.S. and Iran have escalated again.",
+      "link": "https://www.cnbc.com/2026/09/14/prediction-markets-traders-think-gas-prices-will-hit-new-highs-in-2026.html",
+      "source": "CNBC Finance",
+      "published": "2026-09-14T15:49:39Z"
+    },
+    {
+      "category": "markets",
+      "title": "National specialty clothing chain closing all its stores",
+      "summary": "",
+      "link": "https://finance.yahoo.com/small-business/articles/national-specialty-clothing-chain-closing-140700669.html",
+      "source": "Yahoo Finance",
+      "published": "2026-09-14T14:07:00Z"
+    },
+    {
+      "category": "markets",
+      "title": "China says AI CEOs' call for a slowdown is 'fear mongering'",
+      "summary": "Chinese state media's reports of the daily press conference also noted that all groups should work together for AI openness and inclusivity.",
+      "link": "https://www.cnbc.com/2026/09/14/china-ai-slowdown-us-tech-ceos.html",
+      "source": "CNBC Finance",
+      "published": "2026-09-14T13:18:23Z"
+    },
+    {
+      "category": "markets",
+      "title": "NFL and midterm elections set up prediction markets for a critical fall season",
+      "summary": "The 2025 football season and 2024 presidential election pushed prediction markets into the prominence they enjoy today.",
+      "link": "https://www.cnbc.com/2026/09/13/nfl-and-midterms-mark-key-fall-season-for-prediction-markets.html",
+      "source": "CNBC Finance",
+      "published": "2026-09-14T12:16:52Z"
+    },
+    {
+      "category": "ai",
+      "title": "How Fyxer built an AI executive assistant people trust",
+      "summary": "Fyxer uses OpenAI models, fine-tuning, memory, and real user feedback to organize inboxes and draft emails in each user’s voice.",
+      "link": "https://openai.com/index/fyxer",
+      "source": "OpenAI News",
+      "published": "2026-09-14T12:00:00Z"
+    },
+    {
+      "category": "markets",
+      "title": "Another coffeehouse files for Chapter 11 as costs, prices rise",
+      "summary": "",
+      "link": "https://finance.yahoo.com/small-business/articles/another-coffeehouse-files-chapter-11-033545256.html",
+      "source": "Yahoo Finance",
+      "published": "2026-09-14T03:35:45Z"
+    },
+    {
+      "category": "ai",
+      "title": "Perplexity trusts GPT-6 Astra with end-to-end systems",
+      "summary": "Perplexity uses Astra to write communications, change software, and monitor production systems, and checks in much less frequently than with earlier models.",
+      "link": "https://openai.com/index/perplexity-improving-accuracy-with-astra",
+      "source": "OpenAI News",
+      "published": "2026-09-14T00:00:00Z"
+    },
+    {
+      "category": "ai",
+      "title": "Cognition helps Devin test its own work with GPT‑6 Astra",
+      "summary": "GPT‑6 Astra improves Devin’s ability to test software and show that it works, with the goal of helping engineers review less code and ship more.",
+      "link": "https://openai.com/index/cognition-devin-testing-with-astra",
+      "source": "OpenAI News",
+      "published": "2026-09-11T16:00:00Z"
+    },
+    {
+      "category": "ai",
+      "title": "Rapidly scaling online storage to serve over 1 billion ChatGPT users",
+      "summary": "Learn how OpenAI evolved Habitat from a Python library into a globally distributed storage platform serving 1 billion ChatGPT users and 22M requests per second.",
+      "link": "https://openai.com/index/scaling-storage-one-billion-users-part-one",
+      "source": "OpenAI News",
+      "published": "2026-09-11T10:00:00Z"
+    },
+    {
+      "category": "ai",
+      "title": "How a researcher uses Codex and ChatGPT to search for new antimicrobial molecules",
+      "summary": "César de la Fuente’s lab uses Codex and ChatGPT to search living and extinct genomes for antimicrobial candidates to fight drug-resistant infections.",
+      "link": "https://openai.com/index/using-codex-chatgpt-to-search-for-new-antimicrobials",
+      "source": "OpenAI News",
+      "published": "2026-09-10T16:00:00Z"
+    },
+    {
+      "category": "ai",
+      "title": "3 ways to prep for your next big race with Search",
+      "summary": "Illustration on a blue background of technicolor runners with a magnifying glass and Gemini spark overlaid",
+      "link": "https://blog.google/products-and-platforms/products/search/running-race-training-tips/",
+      "source": "Google AI",
+      "published": "2026-09-10T16:00:00Z"
+    },
+    {
+      "category": "tech",
+      "title": "The yield imperative: Turning AI infrastructure into useful intelligence",
+      "summary": "As we enter the next era, what will be the defining measure of our progress? Every industry has a word that shapes how it thinks. For pilots, it’s safety. For insurers, it’s risk. For the semiconductor industry, it’s yield. Yield does not a…",
+      "link": "https://blogs.microsoft.com/blog/2026/09/01/the-yield-imperative-turning-ai-infrastructure-into-useful-intelligence/",
+      "source": "Microsoft Blog",
+      "published": "2026-09-02T06:00:02Z"
+    },
+    {
+      "category": "tech",
+      "title": "Looking back on Microsoft’s FY26: From AI experimentation to Frontier Transformation",
+      "summary": "Throughout this past fiscal year, customers across every industry and segment moved from AI experimentation to deploying AI for real-world business outcomes. They unlocked innovation and created new opportunities for growth. We saw the emer…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/28/looking-back-on-microsofts-fy26-from-ai-experimentation-to-frontier-transformation/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-28T16:00:10Z"
+    },
+    {
+      "category": "tech",
+      "title": "Rethinking security for the age of AI",
+      "summary": "Editor’s note: Updates with additional details on the model’s crash score. Why security needs a new cyber stack — Introducing Project Perception The physics of cybersecurity are changing. Autonomous systems can now reason, adapt and operate…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/27/rethinking-security-for-the-age-of-ai/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-27T16:30:09Z"
+    },
+    {
+      "category": "tech",
+      "title": "Powering America’s Genesis Mission: Microsoft’s commitment to scientific discovery",
+      "summary": "Today, we’re excited to share a long-term commitment to the Department of Energy’s (DOE) Genesis Mission, backed by a $60 million investment designed to accelerate AI for science and the breakthroughs it can deliver for the country. This de…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/22/powering-americas-genesis-mission-microsofts-commitment-to-scientific-discovery/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-22T12:00:06Z"
+    },
+    {
+      "category": "tech",
+      "title": "Microsoft expands Azure AI and HPC infrastructure with AMD",
+      "summary": "AI workloads are scaling faster than any single infrastructure approach can support — with more models, new agent-driven workloads and surging compute demand driving the need for greater specialization across the stack. To meet this need, M…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/20/microsoft-expands-azure-ai-and-hpc-infrastructure-with-amd/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-20T13:00:02Z"
+    },
+    {
+      "category": "tech",
+      "title": "The latest in our company transformation",
+      "summary": "Amy Coleman, EVP and Chief People Officer, shared the following communication with employees today. When I stepped into this role, I promised to communicate more openly with you and share the “why” behind our decisions. Today we are elimina…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/06/the-latest-in-our-company-transformation/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-06T13:30:28Z"
+    },
+    {
+      "category": "tech",
+      "title": "Microsoft Frontier Company: AI engineering that amplifies and protects your intelligence",
+      "summary": "The pace of AI adoption is moving incredibly fast. Customers have moved well beyond experimentation and understand the importance of adopting AI to transform their business. They are now concentrating on delivering measurable business outco…",
+      "link": "https://blogs.microsoft.com/blog/2026/07/02/microsoft-frontier-company-ai-engineering-that-amplifies-and-protects-your-intelligence/",
+      "source": "Microsoft Blog",
+      "published": "2026-07-02T12:59:05Z"
+    },
+    {
+      "category": "tech",
+      "title": "Inside Microsoft’s two-decade push to cut water intensity while scaling for growth",
+      "summary": "As demand for cloud and AI services continues to grow, datacenters are becoming more essential than ever. Communities also want to better understand how this infrastructure affects local resources, particularly water. At Microsoft, water st…",
+      "link": "https://blogs.microsoft.com/blog/2026/06/24/inside-microsofts-two-decade-push-to-cut-water-intensity-while-scaling-for-growth/",
+      "source": "Microsoft Blog",
+      "published": "2026-06-24T12:01:13Z"
+    }
+  ],
+  "sources": [
+    {
+      "name": "OpenAI News",
+      "category": "ai",
+      "url": "https://openai.com/news/rss.xml",
+      "ok": true,
+      "count": 1193
+    },
+    {
+      "name": "Google AI",
+      "category": "ai",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/rss/",
+      "ok": true,
+      "count": 20
+    },
+    {
+      "name": "Microsoft Blog",
+      "category": "tech",
+      "url": "https://blogs.microsoft.com/feed/",
+      "ok": true,
+      "count": 10
+    },
+    {
+      "name": "CNBC Finance",
+      "category": "markets",
+      "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+      "ok": true,
+      "count": 30
+    },
+    {
+      "name": "Yahoo Finance",
+      "category": "markets",
+      "url": "https://finance.yahoo.com/news/rssindex",
+      "ok": true,
+      "count": 50
+    },
+    {
+      "name": "Federal Reserve",
+      "category": "markets",
+      "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+      "ok": true,
+      "count": 20
+    },
+    {
+      "name": "SEC Press Releases",
+      "category": "markets",
+      "url": "https://www.sec.gov/news/pressreleases.rss",
+      "ok": true,
+      "count": 25
+    }
+  ]
+}
