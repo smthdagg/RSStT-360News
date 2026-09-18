@@ -19,6 +19,9 @@ matplotlib==3.9.4
 asyncpg==0.30.0
 tortoise-orm[accel]==0.25.1
 aerich==0.8.1
+# asyncclick 8.3.x (what Python 3.10 resolves for aerich) imports anyio at
+# runtime without declaring it; 3.11+ resolve asyncclick 8.4.x instead.
+anyio==4.14.2; python_version >= "3.10"
 
 # network
 aiohttp[speedups]==3.12.14
