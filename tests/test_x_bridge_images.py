@@ -31,6 +31,20 @@ class XBridgeImageTests(unittest.TestCase):
         self.assertEqual([tweet["id"] for tweet in tweets], ["128"])
         self.assertIn("/tweet-image/128.png", tweets[0]["screenshot_url"])
 
+    def test_all_screenshot_failures_preserve_the_previous_feed(self):
+        worker = XAPIWorker()
+        worker.fetcher = Mock()
+        worker.fetcher.fetch_tweets.return_value = [
+            {"id": "129", "url": "https://x.com/i/web/status/129", "text": "unavailable"},
+        ]
+        worker.fetcher.capture_tweet_screenshot.side_effect = RuntimeError("browser closed")
+
+        with patch("src.twitter_rss_bridge.TWEET_IMAGE_DIR", Path("/screenshots")):
+            tweets = worker.fetch_tweets("daydayuplift")
+
+        self.assertIsNone(tweets)
+        self.assertEqual(worker._last_error, "screenshot_failed")
+
     def test_config_limits_fetching_to_configured_usernames(self):
         with patch(
             "src.twitter_rss_bridge.get_bridge_config",

@@ -13,6 +13,7 @@ from src.x_browser_fetcher import (
     should_refresh_cache_entry,
     XAuthExpiredError,
     XBrowserFetcher,
+    XBrowserError,
     XRateLimitedError,
     _cookie_action_priority,
 )
@@ -70,6 +71,26 @@ class CookieSanitizingTests(unittest.TestCase):
 
 
 class TimelineParsingTests(unittest.TestCase):
+    def test_extracts_and_deduplicates_reply_module_items(self):
+        response = timeline_payload("456")
+        instructions = response["data"]["user"]["result"]["timeline"]["timeline"]["instructions"]
+        tweet = extract_tweets_from_timeline(response)[0]
+        module_tweet = {
+            "item": {
+                "itemContent": {
+                    "__typename": "TimelineTweet",
+                    "tweet_results": {"result": tweet},
+                }
+            }
+        }
+        instructions[0]["entries"] = [{
+            "content": {"items": [module_tweet, module_tweet]},
+        }]
+
+        extracted = extract_tweets_from_timeline(response)
+
+        self.assertEqual([item["rest_id"] for item in extracted], ["456"])
+
     def test_extracts_visible_tweet_wrappers_and_parses_long_text(self):
         response = {
             "data": {
@@ -211,9 +232,9 @@ def timeline_payload(tweet_id="456"):
 
 
 class FakeResponse:
-    def __init__(self, status=200, payload=None):
+    def __init__(self, status=200, payload=None, operation="UserTweetsAndReplies"):
         self.status = status
-        self.url = "https://x.com/i/api/graphql/query/UserTweets?variables=x"
+        self.url = f"https://x.com/i/api/graphql/query/{operation}?variables=x"
         self._payload = payload if payload is not None else timeline_payload()
 
     def json(self):
@@ -229,6 +250,11 @@ class FakeExpectation:
 
     def __exit__(self, *_args):
         return False
+
+
+class FakeLocator:
+    def all(self):
+        return []
 
 
 class FakePage:
@@ -247,11 +273,16 @@ class FakePage:
         self.expect_timeout = timeout
         if self.error:
             raise self.error
+        if not self.predicate_matched:
+            raise TimeoutError("No matching timeline response")
         return FakeExpectation(self.response)
 
     def goto(self, url, **_kwargs):
         self.url = url
         self.visited_urls.append(url)
+
+    def locator(self, _selector):
+        return FakeLocator()
 
 
 class FakeContext:
@@ -351,6 +382,21 @@ class BrowserFetcherTests(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 fetcher.fetch_tweets("bad user!")
+
+    def test_does_not_accept_the_posts_only_timeline_response(self):
+        with tempfile.TemporaryDirectory() as directory:
+            page = FakePage(FakeResponse(
+                operation="UserTweets",
+                payload=timeline_payload("posts-only"),
+            ))
+            fetcher, context = self.make_fetcher(directory, page)
+            fetcher._context = context
+            fetcher._page = page
+
+            with self.assertRaises(XBrowserError):
+                fetcher.fetch_tweets("daydayuplift")
+
+            self.assertFalse(page.predicate_matched)
 
     def test_raises_typed_rate_limit_and_auth_errors(self):
         with tempfile.TemporaryDirectory() as directory:
