@@ -236,6 +236,7 @@ class FakePage:
         self.response = response or FakeResponse()
         self.error = error
         self.url = "about:blank"
+        self.visited_urls = []
         self.default_timeout = None
 
     def set_default_timeout(self, value):
@@ -250,6 +251,7 @@ class FakePage:
 
     def goto(self, url, **_kwargs):
         self.url = url
+        self.visited_urls.append(url)
 
 
 class FakeContext:
@@ -343,6 +345,10 @@ class BrowserFetcherTests(unittest.TestCase):
             self.assertEqual(tweets[0]["id"], "789")
             self.assertEqual(fetcher.last_status, 200)
             self.assertTrue(page.predicate_matched)
+            self.assertEqual(
+                page.visited_urls,
+                ["about:blank", "https://x.com/valid_user/with_replies"],
+            )
             with self.assertRaises(ValueError):
                 fetcher.fetch_tweets("bad user!")
 
@@ -383,6 +389,46 @@ class BrowserFetcherTests(unittest.TestCase):
             with patch.object(fetcher, "start", side_effect=RuntimeError("recapture")):
                 with self.assertRaisesRegex(RuntimeError, "recapture"):
                     fetcher.capture_tweet_screenshot("123", image_dir)
+
+    def test_retries_screenshot_after_browser_target_closes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fetcher, _ = self.make_fetcher(directory)
+            image_dir = Path(directory) / "screenshots"
+            image_path = image_dir / "123.png"
+            with patch.object(
+                fetcher,
+                "_capture_tweet_screenshot_once",
+                side_effect=[
+                    RuntimeError("Locator.all: Target page, context or browser has been closed"),
+                    image_path,
+                ],
+            ) as capture, patch.object(fetcher, "close") as close, patch.object(
+                fetcher, "start"
+            ) as start:
+                result = fetcher.capture_tweet_screenshot("123", image_dir)
+
+            self.assertEqual(result, image_path)
+            self.assertEqual(capture.call_count, 2)
+            close.assert_called_once_with()
+            start.assert_called_once_with()
+
+    def test_does_not_restart_browser_for_non_target_screenshot_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fetcher, _ = self.make_fetcher(directory)
+            image_dir = Path(directory) / "screenshots"
+            with patch.object(
+                fetcher,
+                "_capture_tweet_screenshot_once",
+                side_effect=RuntimeError("image layout timeout"),
+            ) as capture, patch.object(fetcher, "close") as close, patch.object(
+                fetcher, "start"
+            ) as start:
+                with self.assertRaisesRegex(RuntimeError, "image layout timeout"):
+                    fetcher.capture_tweet_screenshot("123", image_dir)
+
+            capture.assert_called_once()
+            close.assert_not_called()
+            start.assert_not_called()
 
 
 if __name__ == "__main__":

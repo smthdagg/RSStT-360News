@@ -3,16 +3,34 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image as PILImage
 
-from src.twitter_rss_bridge import configured_x_usernames, generate_rss
+from src.twitter_rss_bridge import XAPIWorker, configured_x_usernames, generate_rss
 from src.parsing.medium import UploadedImage
 from src.parsing.post_formatter import PostFormatter
 
 
 class XBridgeImageTests(unittest.TestCase):
+    def test_tweets_without_screenshots_are_not_published(self):
+        worker = XAPIWorker()
+        worker.fetcher = Mock()
+        worker.fetcher.fetch_tweets.return_value = [
+            {"id": "127", "url": "https://x.com/i/web/status/127", "text": "missed"},
+            {"id": "128", "url": "https://x.com/i/web/status/128", "text": "captured"},
+        ]
+        worker.fetcher.capture_tweet_screenshot.side_effect = [
+            RuntimeError("browser target closed"),
+            Path("/screenshots/128.png"),
+        ]
+
+        with patch("src.twitter_rss_bridge.TWEET_IMAGE_DIR", Path("/screenshots")):
+            tweets = worker.fetch_tweets("daydayuplift")
+
+        self.assertEqual([tweet["id"] for tweet in tweets], ["128"])
+        self.assertIn("/tweet-image/128.png", tweets[0]["screenshot_url"])
+
     def test_config_limits_fetching_to_configured_usernames(self):
         with patch(
             "src.twitter_rss_bridge.get_bridge_config",
