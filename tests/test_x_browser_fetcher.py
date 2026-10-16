@@ -16,6 +16,7 @@ from src.x_browser_fetcher import (
     XBrowserError,
     XRateLimitedError,
     _cookie_action_priority,
+    _tweet_article_selector,
 )
 
 
@@ -319,6 +320,12 @@ class FakeManager:
 
 
 class BrowserFetcherTests(unittest.TestCase):
+    def test_reply_screenshot_selector_matches_the_requested_status(self):
+        self.assertEqual(
+            _tweet_article_selector("123"),
+            "article:has(a[href$='/status/123'], a[href*='/status/123/'], a[href*='/status/123?'], a[href*='/i/web/status/123'])",
+        )
+
     def make_fetcher(self, directory, page=None):
         root = Path(directory)
         session = root / "x_session.json"

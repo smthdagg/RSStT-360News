@@ -198,6 +198,14 @@ def _unwrap_tweet_result(result: Any) -> dict[str, Any] | None:
     return None
 
 
+def _tweet_article_selector(tweet_id: str) -> str:
+    return (
+        f"article:has(a[href$='/status/{tweet_id}'], "
+        f"a[href*='/status/{tweet_id}/'], a[href*='/status/{tweet_id}?'], "
+        f"a[href*='/i/web/status/{tweet_id}'])"
+    )
+
+
 def extract_tweets_from_timeline(api_response: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract raw Tweet objects from current and legacy UserTweets layouts."""
     try:
@@ -618,7 +626,7 @@ class XBrowserFetcher:
             )
             page.wait_for_timeout(750)
             _dismiss_cookie_consent(page)
-            article = page.locator("article").first
+            article = page.locator(_tweet_article_selector(tweet_id)).first
             article.wait_for(state="visible", timeout=self.timeout_seconds * 1_000)
             _dismiss_cookie_consent(page)
             # Keep the complete outer tweet, including quote/reply cards. Remove
