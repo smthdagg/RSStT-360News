@@ -43,6 +43,7 @@ from src.x_browser_fetcher import (
     XBrowserFetcher,
     XRateLimitedError,
     CAPTURE_VERSION,
+    _count_nested_media,
     should_refresh_cache_entry,
 )
 
@@ -225,15 +226,29 @@ class XAPIWorker:
         try:
             print(f"[XBridge][Browser] 打开 @{username} ...")
             parsed = self.fetcher.fetch_tweets(username)[:FETCH_LIMIT]
+            captured = []
             for tweet in parsed:
                 try:
-                    self.fetcher.capture_tweet_screenshot(tweet['id'], TWEET_IMAGE_DIR)
+                    self.fetcher.capture_tweet_screenshot(
+                        tweet['id'],
+                        TWEET_IMAGE_DIR,
+                        expected_media_count=_count_nested_media(tweet),
+                        is_reply=bool(tweet.get('in_reply_to_status_id')),
+                    )
                     tweet['screenshot_url'] = (
                         f"http://127.0.0.1:{PORT}/tweet-image/{tweet['id']}.png?v={CAPTURE_VERSION}"
                     )
                     tweet['screenshot_time'] = datetime.now(timezone.utc)
+                    captured.append(tweet)
                 except Exception as exc:
                     print(f"[XBridge][Browser] 推文 {tweet['id']} 截图失败: {exc}")
+            if parsed and not captured:
+                self._last_fetch_ok = False
+                self._last_error = 'screenshot_failed'
+                self._total_fetches += 1
+                print(f"[XBridge][Browser] @{username}: 截图全部失败，保留旧缓存")
+                return None
+            parsed = captured
             print(f"[XBridge][Browser] @{username}: 获取 {len(parsed)} 条推文")
             self._last_fetch_ok = True
             self._last_error = None

@@ -1,11 +1,13 @@
 import unittest
 import json
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from src.x_browser_fetcher import (
+    CAPTURE_VERSION,
     classify_x_response,
     extract_tweets_from_timeline,
     parse_tweet_to_dict,
@@ -72,6 +74,40 @@ class CookieSanitizingTests(unittest.TestCase):
 
 
 class TimelineParsingTests(unittest.TestCase):
+    def test_parses_quote_result_from_current_graphql_shape(self):
+        raw = extract_tweets_from_timeline(timeline_payload())[0]
+        raw["quoted_status_result"] = {
+            "result": {
+                "__typename": "Tweet",
+                "rest_id": "quote-123",
+                "legacy": {
+                    "full_text": "quoted photo",
+                    "created_at": "Wed Jul 22 01:02:03 +0000 2026",
+                    "extended_entities": {
+                        "media": [
+                            {
+                                "type": "photo",
+                                "media_url_https": "https://pbs.twimg.com/media/photo.jpg",
+                            }
+                        ]
+                    },
+                },
+            }
+        }
+
+        parsed = parse_tweet_to_dict(raw)
+
+        self.assertTrue(parsed["is_quote"])
+        self.assertEqual(parsed["quoted_tweet"]["media"][0]["type"], "photo")
+
+    def test_parsed_tweet_keeps_reply_parent_id(self):
+        raw = extract_tweets_from_timeline(timeline_payload())[0]
+        raw["legacy"]["in_reply_to_status_id_str"] = "parent-123"
+
+        parsed = parse_tweet_to_dict(raw)
+
+        self.assertEqual(parsed["in_reply_to_status_id"], "parent-123")
+
     def test_extracts_and_deduplicates_reply_module_items(self):
         response = timeline_payload("456")
         instructions = response["data"]["user"]["result"]["timeline"]["timeline"]["instructions"]
@@ -326,6 +362,26 @@ class BrowserFetcherTests(unittest.TestCase):
             "article:has(a[href$='/status/123'], a[href*='/status/123/'], a[href*='/status/123?'], a[href*='/i/web/status/123'])",
         )
 
+    def test_reuses_old_post_capture_but_recaptures_old_reply_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_dir = Path(directory) / "screenshots"
+            image_dir.mkdir()
+            image_path = image_dir / "123.png"
+            image_path.write_bytes(b"old capture")
+            previous_version = f"v{int(CAPTURE_VERSION[1:]) - 1}"
+            (image_dir / f"123.png.capture-{previous_version}").write_text(previous_version)
+            fetcher, _ = self.make_fetcher(directory)
+
+            with patch.object(fetcher, "start", side_effect=RuntimeError("recapture")) as start:
+                self.assertEqual(
+                    fetcher.capture_tweet_screenshot("123", image_dir, is_reply=False),
+                    image_path,
+                )
+                start.assert_not_called()
+                with self.assertRaisesRegex(RuntimeError, "recapture"):
+                    fetcher.capture_tweet_screenshot("123", image_dir, is_reply=True)
+                start.assert_called_once_with()
+
     def make_fetcher(self, directory, page=None):
         root = Path(directory)
         session = root / "x_session.json"
@@ -377,20 +433,22 @@ class BrowserFetcherTests(unittest.TestCase):
             fetcher, context = self.make_fetcher(directory, page)
             fetcher._context = context
             fetcher._page = page
+            fetcher._started_monotonic = time.monotonic()
 
             tweets = fetcher.fetch_tweets("@Valid_User")
 
             self.assertEqual(tweets[0]["id"], "789")
             self.assertEqual(fetcher.last_status, 200)
             self.assertTrue(page.predicate_matched)
-            self.assertEqual(
-                page.visited_urls,
-                ["about:blank", "https://x.com/valid_user/with_replies"],
+            self.assertEqual(page.visited_urls[0], "about:blank")
+            self.assertRegex(
+                page.visited_urls[1],
+                r"^https://x\.com/valid_user/with_replies\?_p=\d+$",
             )
             with self.assertRaises(ValueError):
                 fetcher.fetch_tweets("bad user!")
 
-    def test_does_not_accept_the_posts_only_timeline_response(self):
+    def test_accepts_the_posts_timeline_response(self):
         with tempfile.TemporaryDirectory() as directory:
             page = FakePage(FakeResponse(
                 operation="UserTweets",
@@ -399,11 +457,11 @@ class BrowserFetcherTests(unittest.TestCase):
             fetcher, context = self.make_fetcher(directory, page)
             fetcher._context = context
             fetcher._page = page
+            fetcher._started_monotonic = time.monotonic()
 
-            with self.assertRaises(XBrowserError):
-                fetcher.fetch_tweets("daydayuplift")
+            tweets = fetcher.fetch_tweets("daydayuplift")
 
-            self.assertFalse(page.predicate_matched)
+            self.assertEqual(tweets[0]["id"], "posts-only")
 
     def test_raises_typed_rate_limit_and_auth_errors(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -411,6 +469,7 @@ class BrowserFetcherTests(unittest.TestCase):
             fetcher, context = self.make_fetcher(directory, rate_page)
             fetcher._context = context
             fetcher._page = rate_page
+            fetcher._started_monotonic = time.monotonic()
             with self.assertRaises(XRateLimitedError):
                 fetcher.fetch_tweets("elonmusk")
 
@@ -424,6 +483,7 @@ class BrowserFetcherTests(unittest.TestCase):
             fetcher, context = self.make_fetcher(directory)
             fetcher._context = context
             fetcher._page = context.pages[0]
+            fetcher._started_monotonic = time.monotonic()
 
             count = fetcher.save_session_cookies()
             saved = json.loads(fetcher.session_file.read_text())

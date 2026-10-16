@@ -7,12 +7,34 @@ from unittest.mock import Mock, patch
 
 from PIL import Image as PILImage
 
-from src.twitter_rss_bridge import XAPIWorker, configured_x_usernames, generate_rss
+from src.twitter_rss_bridge import (
+    XAPIWorker,
+    cache,
+    configured_x_usernames,
+    generate_rss,
+    update_cache_entry,
+)
 from src.parsing.medium import UploadedImage
 from src.parsing.post_formatter import PostFormatter
 
 
 class XBridgeImageTests(unittest.TestCase):
+    def test_reply_status_is_passed_to_screenshot_capture(self):
+        worker = XAPIWorker()
+        worker.fetcher = Mock()
+        worker.fetcher.fetch_tweets.return_value = [{
+            "id": "130",
+            "url": "https://x.com/i/web/status/130",
+            "text": "reply",
+            "in_reply_to_status_id": "120",
+        }]
+        worker.fetcher.capture_tweet_screenshot.return_value = Path("/screenshots/130.png")
+
+        with patch("src.twitter_rss_bridge.TWEET_IMAGE_DIR", Path("/screenshots")):
+            worker.fetch_tweets("daydayuplift")
+
+        self.assertTrue(worker.fetcher.capture_tweet_screenshot.call_args.kwargs["is_reply"])
+
     def test_tweets_without_screenshots_are_not_published(self):
         worker = XAPIWorker()
         worker.fetcher = Mock()
@@ -39,10 +61,22 @@ class XBridgeImageTests(unittest.TestCase):
         ]
         worker.fetcher.capture_tweet_screenshot.side_effect = RuntimeError("browser closed")
 
-        with patch("src.twitter_rss_bridge.TWEET_IMAGE_DIR", Path("/screenshots")):
+        previous = {
+            "rss": "previous-good-feed",
+            "updated_at": 123,
+            "last_attempt_at": 123,
+            "error": None,
+        }
+        with patch("src.twitter_rss_bridge.TWEET_IMAGE_DIR", Path("/screenshots")), patch.dict(
+            cache, {"daydayuplift": previous}, clear=True
+        ):
             tweets = worker.fetch_tweets("daydayuplift")
+            update_cache_entry("daydayuplift", tweets)
 
-        self.assertIsNone(tweets)
+            self.assertIsNone(tweets)
+            self.assertEqual(cache["daydayuplift"]["rss"], "previous-good-feed")
+            self.assertEqual(cache["daydayuplift"]["updated_at"], 123)
+            self.assertEqual(cache["daydayuplift"]["error"], "fetch_failed")
         self.assertEqual(worker._last_error, "screenshot_failed")
 
     def test_config_limits_fetching_to_configured_usernames(self):
