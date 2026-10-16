@@ -1,6 +1,6 @@
 # 360News VPS deployment
 
-The Tencent target was checked at `YOUR_VPS_IP`: 4 vCPU, 3.6 GiB RAM, 2 GiB swap and 39 GiB disk. Existing services own ports 80/8000/8080, so the admin uses public port `8787`.
+The Tencent target provides 4 vCPU, 3.6 GiB RAM, 2 GiB swap and 39 GiB disk. Existing services own ports 80/8000/8080, so the admin uses public port `8787`.
 
 On the VPS:
 
